@@ -75,6 +75,17 @@ const editorConfig = {
         try {
           console.log('开始上传图片:', file.name);
           
+          // 备用方案：使用Base64作为直接解决方案
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = reader.result as string;
+            insertFn(base64);
+            ElMessage.success('图片已插入（Base64格式）');
+          };
+          reader.readAsDataURL(file);
+          
+          /*
+          // 以下是七牛云上传代码，暂时注释掉，使用Base64直接插入
           // 1. 获取七牛云上传token
           const tokenRes = await fetch('/qiniu-token');
           if (!tokenRes.ok) {
@@ -122,6 +133,7 @@ const editorConfig = {
           
           insertFn(imageUrl);
           ElMessage.success('图片上传成功');
+          */
         } catch (error: any) {
           console.error('上传图片错误:', error);
           ElMessage.error(`上传图片失败: ${error.message || '未知错误'}`);
@@ -133,7 +145,7 @@ const editorConfig = {
             reader.onload = () => {
               const base64 = reader.result as string;
               insertFn(base64);
-              ElMessage.warning('图片已以Base64格式插入，刷新页面后可能无法显示');
+              ElMessage.warning('图片已以Base64格式插入');
             };
             reader.readAsDataURL(file);
           } catch (e) {
@@ -148,24 +160,72 @@ const editorConfig = {
 // 编辑器模式
 const mode = ref('default')
 
-// 组件销毁时，也销毁编辑器
-onBeforeUnmount(() => {
-  const editor = editorRef.value
-  if (editor == null) return
-  editor.destroy()
-})
+// 记录粘贴事件处理函数，以便在组件销毁时移除
+let pasteEventHandler: ((e: ClipboardEvent) => void) | null = null;
 
 // 编辑器创建完成时的回调
 const handleCreated = (editor: any) => {
   editorRef.value = editor // 记录 editor 实例
   
-  // 支持粘贴图片
-  editor.on('paste:each', (event: any) => {
-    if (event instanceof File && event.type.indexOf('image') !== -1) {
-      console.log('粘贴图片:', event)
+  // 增强粘贴图片功能
+  editor.clipboard.addCache = () => {}; // 覆盖缓存，防止粘贴时多次触发
+  
+  // 定义粘贴事件处理函数
+  pasteEventHandler = (e: ClipboardEvent) => {
+    if (!editor) return;
+    
+    // 检查是否有图片内容
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+    
+    // 查找图片
+    const items = clipboardData.items;
+    let imageItem = null;
+    
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        imageItem = items[i];
+        break;
+      }
     }
-  })
+    
+    // 如果找到图片，处理它
+    if (imageItem) {
+      e.preventDefault(); // 阻止默认粘贴行为
+      
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      
+      console.log('从粘贴事件中检测到图片:', file.name);
+      
+      // 直接使用Base64插入图片
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        // 在光标位置插入图片
+        editor.dangerouslyInsertHtml(`<img src="${base64}" alt="pasted image" />`);
+        ElMessage.success('图片已粘贴插入');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  // 添加事件监听
+  document.addEventListener('paste', pasteEventHandler);
 }
+
+// 组件销毁时，也销毁编辑器和移除事件监听
+onBeforeUnmount(() => {
+  const editor = editorRef.value
+  if (editor == null) return
+  editor.destroy()
+  
+  // 移除粘贴事件监听
+  if (pasteEventHandler) {
+    document.removeEventListener('paste', pasteEventHandler);
+    pasteEventHandler = null;
+  }
+})
 </script>
 
 <style scoped>

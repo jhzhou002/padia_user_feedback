@@ -39,7 +39,11 @@ const zhCN = {
     issueDescription: '问题描述',
     detailDescription: '请详细描述您遇到的问题...',
     isPublic: '在处理完成后公开此问题',
-    submit: '提交'
+    submit: '提交',
+    autoTitle: '智能标题',
+    title: '标题',
+    titlePlaceholder: '请输入问题标题',
+    generatedTitle: '自动生成标题'
   },
   task: {
     title: '任务列表',
@@ -140,6 +144,26 @@ const zhCN = {
     edit: {
       title: '编辑问题',
       success: '问题更新成功'
+    },
+    submit_issue: {
+      title: '提交问题',
+      module_selection: '选择模块',
+      module_placeholder: '请选择问题所属的模块',
+      description: '问题描述',
+      description_placeholder: '请详细描述您遇到的问题...',
+      screenshot: '截图',
+      add_screenshot: '添加截图',
+      submit: '提交',
+      submitting: '提交中...',
+      submit_success: '问题提交成功',
+      submit_fail: '提交失败，请稍后重试',
+      empty_content_warning: '问题描述不能为空',
+      magic_title: '智能标题',
+      magic_title_button: '生成标题',
+      title_preview: '标题预览',
+      title_preview_placeholder: '标题将根据您输入的问题描述自动生成',
+      email_sent_success: '邮件通知已发送给负责的开发者',
+      email_sent_fail: '邮件通知发送失败，但问题已成功提交'
     }
   }
 }
@@ -182,7 +206,11 @@ const enUS = {
     issueDescription: 'Issue Description',
     detailDescription: 'Please describe your issue in detail...',
     isPublic: 'Make this issue public after being resolved',
-    submit: 'Submit'
+    submit: 'Submit',
+    autoTitle: 'Auto Title',
+    title: 'Title',
+    titlePlaceholder: 'Please enter the issue title',
+    generatedTitle: 'Auto Generated Title'
   },
   task: {
     title: 'Task List',
@@ -283,6 +311,26 @@ const enUS = {
     edit: {
       title: 'Edit Issue',
       success: 'Issue updated successfully'
+    },
+    submit_issue: {
+      title: 'Submit Issue',
+      module_selection: 'Select Module',
+      module_placeholder: 'Please select the module for the issue',
+      description: 'Issue Description',
+      description_placeholder: 'Please describe your issue in detail...',
+      screenshot: 'Screenshot',
+      add_screenshot: 'Add Screenshot',
+      submit: 'Submit',
+      submitting: 'Submitting...',
+      submit_success: 'Issue submitted successfully',
+      submit_fail: 'Submission failed, please try again later',
+      empty_content_warning: 'Issue description cannot be empty',
+      magic_title: 'Auto Title',
+      magic_title_button: 'Generate Title',
+      title_preview: 'Title Preview',
+      title_preview_placeholder: 'Title will be automatically generated based on your issue description',
+      email_sent_success: 'Email notification sent to responsible developer',
+      email_sent_fail: 'Email notification failed to send, but issue submitted successfully'
     }
   }
 }

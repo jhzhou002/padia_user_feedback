@@ -1,5 +1,6 @@
 import request from './request'
 import type { ApiResponse, Issue, PaginatedResponse } from '../types'
+import axios from 'axios'
 
 interface Issue {
   id: number
@@ -138,6 +139,19 @@ export const issueApi = {
       method: 'post'
     })
   }
+}
+
+/**
+ * 提交问题
+ * @param data 问题数据
+ */
+export const submitIssue = (data: any) => {
+  return axios.post('/api/issues', data, {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token')}`
+    }
+  })
 }
 
 export default issueApi 

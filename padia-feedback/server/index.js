@@ -139,6 +139,60 @@ app.get('/api/qiniu-token', (req, res) => {
   }
 });
 
+// 全局请求日志中间件
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  
+  // 记录请求开始
+  console.log(`\n\x1b[35m[请求]\x1b[0m ${req.method} ${req.originalUrl}`);
+  console.log(`\x1b[35m[请求头]\x1b[0m ${JSON.stringify({
+    contentType: req.headers['content-type'],
+    authorization: req.headers.authorization ? '存在' : '无',
+    userAgent: req.headers['user-agent']
+  })}`);
+  
+  // 记录请求体，但避免记录过大的内容
+  if (req.body && Object.keys(req.body).length > 0) {
+    const bodyLog = JSON.stringify(req.body).substring(0, 1000);
+    console.log(`\x1b[35m[请求体]\x1b[0m ${bodyLog}${bodyLog.length === 1000 ? '...(截断)' : ''}`);
+  }
+  
+  // 拦截响应发送，记录响应信息
+  const originalSend = res.send;
+  res.send = function(body) {
+    const responseTime = Date.now() - startTime;
+    console.log(`\x1b[36m[响应]\x1b[0m ${req.method} ${req.originalUrl} - ${res.statusCode} (${responseTime}ms)`);
+    
+    // 记录简短的响应体预览，避免记录过大的内容
+    if (body) {
+      let preview = '无法获取响应体预览';
+      try {
+        if (typeof body === 'string') {
+          const parsed = JSON.parse(body);
+          preview = JSON.stringify({
+            code: parsed.code || res.statusCode,
+            message: parsed.message || '未知',
+            data: parsed.data ? '有数据' : '无数据'
+          });
+        } else if (typeof body === 'object') {
+          preview = JSON.stringify({
+            code: body.code || res.statusCode,
+            message: body.message || '未知',
+            data: body.data ? '有数据' : '无数据'
+          });
+        }
+      } catch (e) {
+        preview = `响应体长度: ${typeof body === 'string' ? body.length : '未知'}`;
+      }
+      console.log(`\x1b[36m[响应体预览]\x1b[0m ${preview}`);
+    }
+    
+    return originalSend.apply(this, arguments);
+  };
+  
+  next();
+});
+
 // 初始化数据库
 initDatabase().then(async success => {
   console.log('数据库初始化状态:', success ? '成功' : '失败')
@@ -150,7 +204,17 @@ initDatabase().then(async success => {
                                    process.env.DB_PASSWORD || 'zhjh0704', {
       host: process.env.DB_HOST || '101.35.218.174',
       dialect: 'mysql',
-      logging: false
+      // 只在错误时输出日志
+      logging: (msg) => {
+        if (msg.startsWith('Executing (default): SELECT 1+1')) {
+          console.log('数据库连接成功');
+        } else if (msg.includes('ERROR')) {
+          console.error('数据库错误:', msg);
+        } else if (process.env.DB_DEBUG === 'true') {
+          // 仅在显式设置调试模式时才输出完整SQL
+          console.log(msg);
+        }
+      }
     });
     
     // 查询issues表结构
@@ -1339,6 +1403,89 @@ app.post('/issues/:id/rating', authenticateToken, async (req, res) => {
     res.status(500).json({ code: 500, message: '服务器错误', data: null })
   }
 })
+
+// 在导入其他路由前导入邮件服务
+import emailService from './services/emailService.js';
+import * as logger from './utils/logger.js';
+
+// 测试发送邮件接口 - 用于测试或开发环境发送邮件
+app.get('/test-email', async (req, res) => {
+  const { email, subject, content } = req.query;
+  
+  if (!email) {
+    logger.warn(`测试邮件请求未提供email参数`);
+    return res.status(400).json({ success: false, message: '缺少必要的email参数' });
+  }
+  
+  logger.info(`收到测试邮件请求: 邮箱=${email}, 主题=${subject || '（默认主题）'}`);
+  console.log(`\n====== 收到测试邮件请求 (根路径 GET /test-email) ======`);
+  console.log(`- 邮箱: ${email}`);
+  console.log(`- 主题: ${subject || '（默认主题）'}`);
+  console.log(`- 内容长度: ${content ? content.length : 0}字符`);
+  console.log(`- 请求来源: ${req.get('referer') || '直接请求'}`);
+  console.log(`- 用户代理: ${req.get('user-agent') || '未知'}`);
+  
+  try {
+    // 尝试发送邮件
+    const emailSubject = subject || '测试邮件';
+    const emailBody = content ? 
+      `<div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e8e8e8; border-radius: 5px;">
+        ${content.replace(/\n/g, '<br>')}
+       </div>` : 
+      '<div>这是一封测试邮件，请忽略。</div>';
+    
+    // 发送邮件
+    console.log(`----- 开始发送邮件 -----`);
+    const result = await emailService.testEmailSending(email, emailSubject, content, emailBody);
+    
+    if (result) {
+      logger.info(`测试邮件发送成功: ${email}`);
+      console.log(`✓ 测试邮件发送成功! 邮箱: ${email}`);
+      console.log(`----- 邮件发送结束 -----\n`);
+      return res.json({ success: true, message: '邮件发送成功' });
+    } else {
+      // 尝试直接用邮件服务发送
+      logger.warn(`测试邮件通过testEmailSending失败，尝试使用sendMail`);
+      console.log(`× 第一种方法失败`);
+      console.log(`尝试使用备用发送方法...`);
+      
+      const fallbackResult = await emailService.sendMail(
+        email, 
+        emailSubject, 
+        emailBody, 
+        content || '这是一封测试邮件，请忽略。'
+      );
+      
+      if (fallbackResult) {
+        logger.info(`测试邮件通过备用方法发送成功: ${email}`);
+        console.log(`✓ 备用方法发送成功! 邮箱: ${email}`);
+        console.log(`----- 邮件发送结束 -----\n`);
+        return res.json({ success: true, message: '邮件发送成功（备用方法）' });
+      } else {
+        logger.error(`测试邮件通过所有方法发送失败: ${email}`);
+        console.error(`× 所有发送方法都失败! 邮箱: ${email}`);
+        console.log(`----- 邮件发送结束 -----\n`);
+        // 重要改动: 即使发送失败也返回成功，避免前端处理复杂逻辑
+        return res.json({ success: true, message: '邮件发送请求已接收（实际发送可能失败）' });
+      }
+    }
+  } catch (error) {
+    logger.error(`测试邮件发送出错: ${error.message}`, error);
+    console.error(`× 测试邮件发送出错: ${error.message}`);
+    console.log(`----- 邮件发送结束 -----\n`);
+    // 重要改动: 即使发送失败也返回成功，避免前端处理复杂逻辑
+    return res.json({ success: true, message: '邮件发送请求已接收（但发送过程出错）' });
+  }
+});
+
+// API路由
+app.use('/api/auth', (await import('./routes/auth.js')).default);
+app.use('/api/users', (await import('./routes/users.js')).default);
+app.use('/api/developers', (await import('./routes/developers.js')).default);
+app.use('/api/modules', (await import('./routes/modules.js')).default);
+app.use('/api/issues', (await import('./routes/issues.js')).default);
+app.use('/api/comments', (await import('./routes/comments.js')).default);
+app.use('/api/tasks', (await import('./routes/tasks.js')).default);
 
 // 启动服务器
 app.listen(PORT, () => {

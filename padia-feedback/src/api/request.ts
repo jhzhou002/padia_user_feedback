@@ -26,7 +26,7 @@ service.interceptors.request.use(
     
     // 从localStorage获取token
     const token = localStorage.getItem('token')
-    console.log('请求拦截器 - token:', token || 'null')
+    console.log('请求拦截器 - token:', token ? '已获取' : '未获取')
     
     if (token) {
       // 确保headers对象存在
@@ -34,6 +34,9 @@ service.interceptors.request.use(
         config.headers = {}
       }
       config.headers['Authorization'] = `Bearer ${token}`
+      console.log('请求拦截器 - 已添加token到请求头')
+    } else {
+      console.warn('请求拦截器 - 未找到token，可能导致认证失败')
     }
     
     // 格式化请求参数日志
@@ -41,7 +44,7 @@ service.interceptors.request.use(
     console.log('请求配置:', {
       url: config.url,
       method: config.method,
-      headers: config.headers,
+      headers: config.headers ? {...config.headers} : {},
       data: typeof reqData === 'object' ? { ...reqData } : reqData
     })
     

@@ -68,7 +68,11 @@
              @click="viewIssueDetail(issue.id)">
           <div class="issue-item-header">
             <span class="issue-title">{{ issue.title }}</span>
-            <el-tag :type="getStatusType(issue.status)" size="small">{{ getStatusLabel(issue.status) }}</el-tag>
+            <el-tag v-if="issue.status === IssueStatus.PENDING" type="danger" size="small">{{ $t('issue.status.pending') }}</el-tag>
+            <el-tag v-else-if="issue.status === IssueStatus.PROCESSING" type="warning" size="small">{{ $t('issue.status.processing') }}</el-tag>
+            <el-tag v-else-if="issue.status === IssueStatus.RESOLVED" type="success" size="small">{{ $t('issue.status.resolved') }}</el-tag>
+            <el-tag v-else-if="issue.status === IssueStatus.CLOSED" type="info" size="small">{{ $t('issue.status.closed') }}</el-tag>
+            <el-tag v-else type="danger" size="small">{{ $t('issue.status.pending') }}</el-tag>
           </div>
           <div class="issue-item-content" v-html="getTruncatedDescription(issue.description)"></div>
           <div class="issue-item-footer">
@@ -99,6 +103,7 @@ import { Search, Document, Clock, Loading, Select } from '@element-plus/icons-vu
 import { issueApi } from '../../api'
 import { IssueStatus, type Issue } from '../../types'
 import { useI18n } from 'vue-i18n'
+import { cleanHtml, extractFirstSentence, findKeywords } from '../../utils/textProcessing'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -162,20 +167,43 @@ const getStatusType = (status: string) => {
       return 'warning'
     case IssueStatus.RESOLVED:
       return 'success'
-    default:
-      // 默认其他状态都使用'info'类型，代表待处理
+    case IssueStatus.CLOSED:
       return 'info'
+    case IssueStatus.PENDING:
+      return 'danger'
+    default:
+      // 默认值使用'danger'类型，代表待处理
+      return 'danger'
   }
 }
 
 // 截断描述，只显示一部分
 const getTruncatedDescription = (description: string) => {
   if (!description) return ''
-  // 移除HTML标签后截取前100个字符
-  const plainText = description.replace(/<[^>]+>/g, '')
-  return plainText.length > 100 
-    ? plainText.substring(0, 100) + '...' 
-    : plainText
+
+  // 清理HTML标记
+  const plainText = cleanHtml(description)
+  
+  // 尝试提取第一个句子
+  let displayText = extractFirstSentence(plainText)
+  
+  // 如果第一个句子太长或没找到句子，则限制长度
+  if (displayText.length > 100) {
+    displayText = plainText.substring(0, 100) + '...'
+  }
+  
+  // 查找关键词并高亮
+  const keywords = findKeywords(plainText)
+  let highlightedText = displayText
+  
+  // 为关键词添加高亮
+  keywords.forEach(keyword => {
+    // 创建不区分大小写的正则表达式
+    const regex = new RegExp(`(${keyword})`, 'gi')
+    highlightedText = highlightedText.replace(regex, '<span class="keyword-highlight">$1</span>')
+  })
+  
+  return highlightedText
 }
 
 // 获取问题列表数据
@@ -329,10 +357,17 @@ const formatDate = (dateString) => {
 
 .issue-item-footer {
   display: flex;
-  justify-content: flex-start;
-  gap: 20px;
+  justify-content: space-between;
+  font-size: 0.8rem;
   color: #909399;
-  font-size: 12px;
+  margin-top: 8px;
+}
+
+.keyword-highlight {
+  background-color: rgba(255, 230, 0, 0.3);
+  font-weight: bold;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 
 .time-info {
