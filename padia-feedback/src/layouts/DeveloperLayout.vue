@@ -1,43 +1,62 @@
 <template>
   <div class="developer-layout">
     <header class="header">
-      <div class="logo">PADIA开发者反馈平台</div>
+      <div class="logo">{{ $t('common.developerPlatformName') }}</div>
       <div class="nav">
-        <router-link to="/developer/tasks" class="nav-item">任务列表</router-link>
-        <router-link to="/developer/statistics" class="nav-item">数据统计</router-link>
+        <router-link to="/developer/tasks" class="nav-item">{{ $t('nav.taskList') }}</router-link>
+        <router-link to="/developer/statistics" class="nav-item">{{ $t('nav.statistics') }}</router-link>
       </div>
       <div class="user-info">
-        <el-dropdown @command="handleCommand">
+        <el-dropdown @command="handleCommand" class="user-dropdown">
           <span class="user-dropdown-link">
+            <el-icon class="user-icon"><User /></el-icon>
             {{ username }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="profile">{{ $t('common.profile') }}</el-dropdown-item>
+              <el-dropdown-item command="language">{{ $t('common.switchLanguage') }}<el-icon class="el-icon--right"><arrow-right /></el-icon></el-dropdown-item>
+              <el-dropdown-item command="logout">{{ $t('common.logout') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+
+        <el-dialog
+          v-model="languageDialogVisible"
+          :title="$t('common.switchLanguage')"
+          width="300px"
+          align-center
+        >
+          <div class="language-options">
+            <el-button @click="changeLanguage('zh-CN')" plain size="large" class="language-btn" :class="{ 'language-active': languageStore.language === 'zh-CN' }">简体中文</el-button>
+            <el-button @click="changeLanguage('en-US')" plain size="large" class="language-btn" :class="{ 'language-active': languageStore.language === 'en-US' }">English</el-button>
+          </div>
+        </el-dialog>
       </div>
     </header>
     <main class="main">
       <router-view />
     </main>
     <footer class="footer">
-      <div>© 2024 PADIA用户反馈平台. All rights reserved.</div>
+      <div>{{ $t('common.copyright') }}</div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, User, ArrowRight } from '@element-plus/icons-vue'
 import authApi from '../api/auth'
+import { useLanguageStore, type LanguageType } from '../stores/language'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const username = ref('开发者')
+const languageStore = useLanguageStore()
+const { t } = useI18n()
+const languageDialogVisible = ref(false)
 
 // 获取用户信息
 const getUserInfo = async () => {
@@ -57,8 +76,18 @@ const handleCommand = (command: string) => {
     handleLogout()
   } else if (command === 'profile') {
     // 跳转到个人中心页面
-    ElMessage.info('个人中心功能即将上线')
+    ElMessage.info(t('common.comingSoon'))
+  } else if (command === 'language') {
+    // 打开语言切换对话框
+    languageDialogVisible.value = true
   }
+}
+
+// 切换语言
+const changeLanguage = (lang: LanguageType) => {
+  languageStore.changeLanguage(lang)
+  languageDialogVisible.value = false
+  ElMessage.success(t('common.languageChanged'))
 }
 
 // 退出登录
@@ -94,7 +123,7 @@ onMounted(() => {
 }
 
 .header {
-  background-color: #67c23a;
+  background-color: #004a96;
   color: white;
   padding: 0 20px;
   height: 60px;
@@ -102,11 +131,25 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
 }
 
 .logo {
   font-size: 20px;
   font-weight: bold;
+  color: white;
+  display: flex;
+  align-items: center;
+}
+
+.logo-image {
+  height: 40px;
+  max-width: 200px;
+  object-fit: contain;
 }
 
 .nav {
@@ -131,7 +174,8 @@ onMounted(() => {
 }
 
 .user-info {
-  margin-left: 20px;
+  display: flex;
+  align-items: center;
 }
 
 .user-dropdown-link {
@@ -141,19 +185,49 @@ onMounted(() => {
   align-items: center;
 }
 
+.user-icon {
+  margin-right: 4px;
+  font-size: 20px;
+}
+
+.language-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.language-btn {
+  width: 100%;
+  font-size: 16px;
+}
+
+.language-active {
+  border-color: #004a96;
+  color: #004a96;
+  font-weight: bold;
+}
+
 .main {
   flex: 1;
   padding: 20px;
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+  margin-bottom: 40px;
+  margin-top: 60px; /* 添加顶部边距，避免内容被导航栏遮挡 */
 }
 
 .footer {
   background-color: #f5f7fa;
-  padding: 20px;
+  padding: 10px;
   text-align: center;
   color: #606266;
   border-top: 1px solid #e4e7ed;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10;
 }
 </style> 

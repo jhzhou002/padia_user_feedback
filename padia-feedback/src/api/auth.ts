@@ -49,7 +49,7 @@ const authApi = {
   },
   
   // 注册
-  register(data: { username: string; password: string; email: string }): Promise<AxiosResponse<ApiResponse<LoginData>>> {
+  register(data: { username: string; password: string; email: string; brand?: string; factory?: string }): Promise<AxiosResponse<ApiResponse<LoginData>>> {
     return request<ApiResponse<LoginData>>({
       url: '/auth/register',
       method: 'post',

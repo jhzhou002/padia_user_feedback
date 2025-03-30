@@ -1,15 +1,15 @@
 <template>
   <div class="statistics-container">
-    <h1>数据统计</h1>
+    <h1>{{ $t('statistics.title') }}</h1>
     
     <div v-loading="loading" class="statistics-content">
-      <el-empty v-if="showEmpty" description="暂无统计数据">
+      <el-empty v-if="showEmpty" :description="$t('statistics.noStatisticsData')">
         <template #image>
           <el-icon style="font-size: 60px"><data-analysis /></el-icon>
         </template>
         <template #description>
-          <p>您目前暂无任务数据或评价数据</p>
-          <p>处理更多问题后可查看详细统计</p>
+          <p>{{ $t('statistics.noStatisticsDesc1') }}</p>
+          <p>{{ $t('statistics.noStatisticsDesc2') }}</p>
         </template>
       </el-empty>
       
@@ -17,13 +17,13 @@
         <!-- 核心数据卡片 -->
         <el-col :span="24">
           <div class="data-section">
-            <h2>工作概况</h2>
+            <h2>{{ $t('statistics.overview') }}</h2>
             <el-row :gutter="20">
               <el-col :xs="12" :sm="6" :md="6" :lg="6">
                 <el-card shadow="hover" class="data-card total-card">
                   <template #header>
                     <div class="card-header">
-                      <span>总问题数</span>
+                      <span>{{ $t('statistics.totalIssues') }}</span>
                     </div>
                   </template>
                   <div class="card-value">{{ statistics.totalIssues }}</div>
@@ -33,7 +33,7 @@
                 <el-card shadow="hover" class="data-card pending-card">
                   <template #header>
                     <div class="card-header">
-                      <span>待处理</span>
+                      <span>{{ $t('statistics.pendingIssues') }}</span>
                     </div>
                   </template>
                   <div class="card-value">{{ statistics.pendingIssues }}</div>
@@ -43,7 +43,7 @@
                 <el-card shadow="hover" class="data-card processing-card">
                   <template #header>
                     <div class="card-header">
-                      <span>处理中</span>
+                      <span>{{ $t('statistics.processingIssues') }}</span>
                     </div>
                   </template>
                   <div class="card-value">{{ statistics.processingIssues }}</div>
@@ -53,7 +53,7 @@
                 <el-card shadow="hover" class="data-card resolved-card">
                   <template #header>
                     <div class="card-header">
-                      <span>已解决</span>
+                      <span>{{ $t('statistics.resolvedIssues') }}</span>
                     </div>
                   </template>
                   <div class="card-value">{{ statistics.resolvedIssues }}</div>
@@ -66,7 +66,7 @@
         <!-- 满意度评价区域 -->
         <el-col :span="24" :lg="12">
           <div class="data-section">
-            <h2>用户满意度</h2>
+            <h2>{{ $t('statistics.userSatisfaction') }}</h2>
             <el-card shadow="hover">
               <div class="satisfaction-container">
                 <div class="rating-summary">
@@ -81,7 +81,9 @@
                         :colors="ratingColors"
                       />
                     </div>
-                    <div class="rating-count">共 {{ statistics.ratingsCount }} 条评价</div>
+                    <div class="rating-count">
+                      {{ $t('statistics.ratings', { count: statistics.ratingsCount }) }}
+                    </div>
                   </div>
                 </div>
                 
@@ -91,7 +93,7 @@
                     :key="i" 
                     class="rating-bar-container"
                   >
-                    <span class="rating-label">{{ i }} 星</span>
+                    <span class="rating-label">{{ i }} {{ $t('statistics.star') }}</span>
                     <div class="rating-bar-wrapper">
                       <div 
                         class="rating-bar" 
@@ -112,34 +114,34 @@
         <!-- 效率指标区域 -->
         <el-col :span="24" :lg="12">
           <div class="data-section">
-            <h2>效率指标</h2>
+            <h2>{{ $t('statistics.efficiency') }}</h2>
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-card shadow="hover" class="time-card">
                   <template #header>
                     <div class="card-header">
-                      <span>平均响应时间</span>
+                      <span>{{ $t('statistics.avgResponseTime') }}</span>
                     </div>
                   </template>
                   <div class="time-value">
                     <span class="time-number">{{ statistics.responseTime }}</span>
-                    <span class="time-unit">小时</span>
+                    <span class="time-unit">{{ $t('statistics.hour') }}</span>
                   </div>
-                  <div class="time-description">从问题提交到首次查看的平均时间</div>
+                  <div class="time-description">{{ $t('statistics.responseTimeDesc') }}</div>
                 </el-card>
               </el-col>
               <el-col :span="12">
                 <el-card shadow="hover" class="time-card">
                   <template #header>
                     <div class="card-header">
-                      <span>平均解决时间</span>
+                      <span>{{ $t('statistics.avgResolveTime') }}</span>
                     </div>
                   </template>
                   <div class="time-value">
                     <span class="time-number">{{ statistics.resolveTime }}</span>
-                    <span class="time-unit">小时</span>
+                    <span class="time-unit">{{ $t('statistics.hour') }}</span>
                   </div>
-                  <div class="time-description">从问题提交到完全解决的平均时间</div>
+                  <div class="time-description">{{ $t('statistics.resolveTimeDesc') }}</div>
                 </el-card>
               </el-col>
             </el-row>
@@ -149,7 +151,7 @@
                 <el-card shadow="hover" class="completion-card">
                   <template #header>
                     <div class="card-header">
-                      <span>问题完成率</span>
+                      <span>{{ $t('statistics.completionRate') }}</span>
                     </div>
                   </template>
                   <div class="completion-container">
@@ -160,7 +162,7 @@
                       :stroke-width="10"
                     />
                     <div class="completion-description">
-                      已解决 {{ statistics.resolvedIssues }} / 总数 {{ statistics.totalIssues }}
+                      {{ $t('statistics.completionDesc', { resolved: statistics.resolvedIssues, total: statistics.totalIssues }) }}
                     </div>
                   </div>
                 </el-card>
@@ -178,6 +180,9 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
 import { issueApi } from '../../api'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 // 加载状态
 const loading = ref(true)

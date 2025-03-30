@@ -1,12 +1,12 @@
 <template>
   <div class="page-container">
-    <h1 class="page-title">热门问题</h1>
+    <h1 class="page-title">{{ $t('issue.hotIssues') }}</h1>
     
     <div class="filter-container">
       <!-- 模块筛选 -->
       <el-select
         v-model="moduleFilter"
-        placeholder="选择模块"
+        :placeholder="$t('form.selectModule')"
         clearable
         class="module-filter"
         @change="handleModuleChange"
@@ -22,7 +22,7 @@
       <!-- 搜索框 -->
       <el-input
         v-model="searchQuery"
-        placeholder="搜索热门问题"
+        :placeholder="$t('issue.searchPlaceholder')"
         class="search-input"
         clearable
         @keyup.enter="handleSearch"
@@ -35,7 +35,7 @@
     
     <div class="hot-issues-container" v-loading="loading">
       <div v-if="hotIssues.length === 0 && !loading" class="empty-container">
-        <el-empty description="暂无热门问题" />
+        <el-empty :description="$t('common.empty')" />
       </div>
       
       <div class="issue-cards">
@@ -86,6 +86,7 @@ import { useRouter } from 'vue-router'
 import { Search, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { issueApi, moduleApi } from '../../api'
+import { useI18n } from 'vue-i18n'
 
 // 定义问题状态枚举（从数据库模型移到前端）
 enum IssueStatus {
@@ -122,6 +123,7 @@ interface UiIssue {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 
 // 搜索关键词
 const searchQuery = ref('')
@@ -270,6 +272,22 @@ const createTestHotIssues = async () => {
     ElMessage.error('创建测试数据失败')
   } finally {
     creatingTestData.value = false
+  }
+}
+
+// 获取状态标签
+const getStatusLabel = (status: string) => {
+  switch (status) {
+    case IssueStatus.PENDING:
+      return t('issue.status.pending')
+    case IssueStatus.PROCESSING:
+      return t('issue.status.processing')
+    case IssueStatus.RESOLVED:
+      return t('issue.status.resolved')
+    case IssueStatus.CLOSED:
+      return t('issue.status.closed')
+    default:
+      return t('issue.status.all')
   }
 }
 

@@ -5,9 +5,19 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { Sequelize, Op } from 'sequelize'
 import { initDatabase, User, Issue, Task, Comment, Module, UserRole, IssueStatus, ModuleType, sequelize } from '../src/db/models/index.js'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
+import qiniu from 'qiniu'
 
 const app = express()
 const PORT = process.env.PORT || 3000
+
+// 七牛云配置
+const accessKey = 'nfxmZVGEHjkd8Rsn44S-JSynTBUUguTScil9dDvC';
+const secretKey = '9lZjiRtRLL0U_MuYkcUZBAL16TlIJ8_dDSbTqqU2';
+const bucket = 'padia'; // 存储空间名
+const domain = 'https://padia.lingjing235.cn'; // CDN域名
 
 // 使用中间件
 app.use(cors())
@@ -29,6 +39,105 @@ app.use((req, res, next) => {
   
   next()
 })
+
+// 确保上传目录存在
+const uploadDir = path.join(process.cwd(), 'uploads')
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true })
+}
+
+// 配置存储
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir)
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    const ext = path.extname(file.originalname) || '.jpg'
+    cb(null, uniqueSuffix + ext)
+  }
+})
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 限制10MB
+  } 
+})
+
+// 文件上传API
+app.post('/upload', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        code: 400, 
+        message: '没有上传文件', 
+        data: null 
+      })
+    }
+
+    console.log('【文件上传】文件信息:', req.file)
+    
+    // 生成可访问的URL
+    const fileUrl = `/uploads/${req.file.filename}`
+    
+    res.json({
+      code: 200,
+      message: '上传成功',
+      data: {
+        url: fileUrl,
+        fileName: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimeType: req.file.mimetype
+      }
+    })
+  } catch (error) {
+    console.error('【文件上传错误】:', error)
+    res.status(500).json({ 
+      code: 500, 
+      message: '上传文件失败', 
+      data: null 
+    })
+  }
+})
+
+// 配置静态文件访问
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
+
+// 七牛云上传token接口
+app.get('/api/qiniu-token', (req, res) => {
+  try {
+    const mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
+    const options = {
+      scope: bucket,
+      expires: 3600, // 1小时有效期
+      returnBody: '{"key":"$(key)","hash":"$(etag)","fsize":$(fsize),"bucket":"$(bucket)","name":"$(x:name)"}'
+    };
+    
+    const putPolicy = new qiniu.rs.PutPolicy(options);
+    const token = putPolicy.uploadToken(mac);
+    
+    console.log('获取七牛云上传凭证成功', { token, domain });
+    
+    // 返回正确的JSON格式
+    return res.json({
+      code: 200,
+      data: {
+        token: token,
+        domain: domain
+      },
+      message: '获取上传凭证成功'
+    });
+  } catch (error) {
+    console.error('获取七牛云上传凭证失败:', error);
+    return res.status(500).json({
+      code: 500,
+      message: '获取上传凭证失败',
+      data: null
+    });
+  }
+});
 
 // 初始化数据库
 initDatabase().then(async success => {
@@ -627,7 +736,7 @@ app.get('/tasks', authenticateToken, checkRole(['developer']), async (req, res) 
           as: 'issue',
           where: issueWhere,
           include: [
-            { model: User, as: 'user', attributes: ['id', 'username', 'avatar'] },
+            { model: User, as: 'user', attributes: ['id', 'username', 'avatar', 'email', 'brand', 'factory'] },
             { model: Module, as: 'module', attributes: ['id', 'name', 'code'] }
           ]
         },

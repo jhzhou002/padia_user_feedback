@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <h1 class="page-title">任务列表</h1>
+    <h1 class="page-title">{{ $t('task.title') }}</h1>
     
     <!-- 状态筛选标签 -->
     <div class="status-tabs">
@@ -9,7 +9,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Document /></el-icon>
-              <span>全部任务</span>
+              <span>{{ $t('task.allTasks') }}</span>
               <el-badge :value="statusCounts.all" class="status-count" type="info" v-if="statusCounts.all > 0" />
             </div>
           </template>
@@ -18,7 +18,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Clock /></el-icon>
-              <span>待处理</span>
+              <span>{{ $t('task.pending') }}</span>
               <el-badge :value="statusCounts.pending" class="status-count" type="danger" v-if="statusCounts.pending > 0" />
             </div>
           </template>
@@ -27,7 +27,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Loading /></el-icon>
-              <span>处理中</span>
+              <span>{{ $t('task.processing') }}</span>
               <el-badge :value="statusCounts.processing" class="status-count" type="warning" v-if="statusCounts.processing > 0" />
             </div>
           </template>
@@ -36,7 +36,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Select /></el-icon>
-              <span>已处理</span>
+              <span>{{ $t('task.resolved') }}</span>
               <el-badge :value="resolvedCount" class="status-count" type="success" v-if="resolvedCount > 0" />
             </div>
           </template>
@@ -48,7 +48,7 @@
       <div class="search-bar">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索任务"
+          :placeholder="$t('task.searchPlaceholder')"
           clearable
           @keyup.enter="handleSearch"
         >
@@ -60,7 +60,7 @@
       
       <el-card v-loading="loading" class="task-list-card">
         <div v-if="taskList.length === 0 && !loading" class="empty-data">
-          <el-empty :description="`暂无${getStatusLabel(activeStatus)}任务`" />
+          <el-empty :description="`${$t('task.emptyTaskPrefix')}${getStatusLabel(activeStatus)}${$t('task.emptyTaskSuffix')}`" />
         </div>
         
         <div v-for="task in taskList" :key="task.id" 
@@ -68,16 +68,27 @@
              @click="handleViewDetail(task)">
           <div class="task-item-header">
             <span class="task-title">{{ task.issue.title }}</span>
-            <div class="tag-group">
-              <el-tag :type="getStatusType(task.issue.status)" size="small" class="tag-item">{{ getStatusLabel(task.issue.status) }}</el-tag>
+            <div class="task-user-info">
+              <span v-if="task.issue.user?.brand">
+                <el-tag size="small" effect="plain" type="info">{{ task.issue.user.brand }}</el-tag>
+              </span>
+              <span v-if="task.issue.user?.factory">
+                <el-tag size="small" effect="plain" type="info">{{ task.issue.user.factory }}</el-tag>
+              </span>
+              <span v-if="task.issue.user?.email">
+                <el-tag size="small" effect="plain" type="info">{{ task.issue.user.email }}</el-tag>
+              </span>
             </div>
           </div>
           <div class="task-item-content">
             {{ getTruncatedDescription(task.issue.description) }}
           </div>
           <div class="task-item-footer">
-            <span class="time-info">分配时间: {{ formatDate(task.createdAt) }}</span>
-            <el-button size="small" type="primary" @click.stop="handleViewDetail(task)" link>处理</el-button>
+            <span class="time-info">{{ $t('task.assignTime') }}: {{ formatDate(task.createdAt) }}</span>
+            <div class="tag-group">
+              <el-tag :type="getStatusType(task.issue.status)" size="small" class="tag-item">{{ getStatusLabel(task.issue.status) }}</el-tag>
+            </div>
+            <el-button size="small" type="primary" @click.stop="handleViewDetail(task)" link>{{ $t('common.process') }}</el-button>
           </div>
         </div>
         
@@ -106,8 +117,10 @@ import {
 } from '@element-plus/icons-vue'
 import developerApi from '../../api/task'
 import { IssueStatus, type Task } from '../../types'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
+const { t } = useI18n()
 
 // 搜索和过滤
 const searchQuery = ref('')
@@ -155,11 +168,11 @@ const priorityOptions = [
 
 // 获取状态标签
 const getStatusLabel = (status: string) => {
-  if (status === 'resolved') return '已处理'
-  if (status === 'processing') return '处理中'
+  if (status === 'resolved') return t('task.resolved')
+  if (status === 'processing') return t('task.processing')
   
   // 默认其他状态都显示为待处理
-  return '待处理'
+  return t('task.pending')
 }
 
 // 获取状态对应的标签类型
@@ -177,8 +190,10 @@ const getStatusType = (status: string) => {
 
 // 获取优先级标签
 const getPriorityLabel = (priority: string) => {
-  const option = priorityOptions.find(item => item.value === priority)
-  return option ? option.label : priority
+  if (priority === 'high') return t('task.priority.high')
+  if (priority === 'medium') return t('task.priority.medium')
+  if (priority === 'low') return t('task.priority.low')
+  return priority
 }
 
 // 获取优先级对应的标签类型
@@ -360,6 +375,14 @@ onMounted(() => {
   font-weight: bold;
   font-size: 16px;
   color: #303133;
+  flex: 1;
+}
+
+.task-user-info {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .tag-group {

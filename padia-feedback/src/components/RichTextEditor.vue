@@ -76,9 +76,46 @@ const editorConfig = {
       maxNumberOfFiles: 10, // 限制一次上传图片的数量
       allowedFileTypes: ['image/*'],
       metaWithUrl: true, // 将图片meta信息发送到服务端
-      withCredentials: true // 跨域时是否携带cookie
+      withCredentials: true, // 跨域时是否携带cookie
+      // 自定义上传图片的回调
+      customUpload: async (file: File, insertFn: (url: string) => void) => {
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          
+          // 上传到服务器
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+          })
+          
+          const result = await response.json()
+          
+          if (result.code === 200 && result.data && result.data.url) {
+            // 插入图片
+            insertFn(result.data.url)
+          } else {
+            console.error('上传图片失败:', result)
+            // 可以使用Element Plus的消息提示组件
+            // ElMessage.error('上传图片失败')
+          }
+        } catch (error) {
+          console.error('上传图片错误:', error)
+          // ElMessage.error('上传图片发生错误')
+        }
+      }
     }
-  }
+  },
+  // 配置粘贴处理
+  PASTE_MATCH_MEDIA: (mediaInfo: any) => {
+    console.log('粘贴媒体:', mediaInfo)
+    return true // 始终返回true，允许所有粘贴媒体
+  },
+  // 配置粘贴中止处理
+  PASTE_ABORT_CUSTOM_HANDLERS: (_event: any) => {
+    // 是否要终止粘贴处理，false表示不终止
+    return false
+  },
 }
 
 // 编辑器模式

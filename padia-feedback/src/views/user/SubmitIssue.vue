@@ -1,10 +1,10 @@
 <template>
   <div class="page-container">
-    <h1 class="page-title">提交问题</h1>
+    <h1 class="page-title">{{ $t('nav.submitIssue') }}</h1>
     <div class="card">
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="所属模块" prop="moduleId">
-          <el-select v-model="form.moduleId" placeholder="请选择问题所属模块" style="width: 100%">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
+        <el-form-item :label="$t('form.module')" prop="moduleId">
+          <el-select v-model="form.moduleId" :placeholder="$t('form.selectModule')" style="width: 100%">
             <el-option 
               v-for="module in moduleOptions" 
               :key="module.id" 
@@ -14,17 +14,17 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item label="问题描述" prop="description">
-          <RichTextEditor v-model="form.description" placeholder="请详细描述您遇到的问题..." @update:modelValue="generateTitle" />
-        </el-form-item>
-        
-        <el-form-item label="是否公开" prop="isPublic">
-          <el-checkbox v-model="form.isPublic">在处理完成后公开该问题到热门问题页面</el-checkbox>
+        <el-form-item :label="$t('form.issueDescription')" prop="description">
+          <QiniuEditor v-model="form.description" :placeholder="$t('form.detailDescription')" @update:modelValue="generateTitle" />
         </el-form-item>
         
         <el-form-item>
-          <el-button type="primary" @click="handleSubmit" :loading="loading">提交问题</el-button>
-          <el-button @click="resetForm">重置</el-button>
+          <el-checkbox v-model="form.isPublic">{{ $t('form.isPublic') }}</el-checkbox>
+        </el-form-item>
+        
+        <el-form-item>
+          <el-button type="primary" @click="handleSubmit" :loading="loading">{{ $t('form.submit') }}</el-button>
+          <el-button @click="resetForm">{{ $t('common.reset') }}</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -34,11 +34,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import RichTextEditor from '../../components/RichTextEditor.vue'
+import QiniuEditor from '../../components/QiniuEditor.vue'
 import { issueApi } from '../../api'
 import { moduleApi } from '../../api'
 import { useRouter } from 'vue-router'
 import type { Module } from '../../types'
+import { useI18n } from 'vue-i18n'
 
 // 表单引用
 const formRef = ref()
@@ -83,7 +84,7 @@ const rules = {
 }
 
 // 根据问题描述自动生成标题
-const generateTitle = (content) => {
+const generateTitle = (content: string) => {
   if (!content) return
   
   // 移除HTML标签获取纯文本
@@ -157,6 +158,7 @@ const resetForm = () => {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 
 // 页面加载时获取模块列表
 onMounted(() => {

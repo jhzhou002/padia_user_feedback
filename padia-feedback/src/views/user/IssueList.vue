@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <h1 class="page-title">我的问题列表</h1>
+    <h1 class="page-title">{{ $t('issue.title') }}</h1>
     
     <!-- 上方状态筛选标签 -->
     <div class="status-tabs">
@@ -9,7 +9,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Document /></el-icon>
-              <span>全部</span>
+              <span>{{ $t('issue.allIssues') }}</span>
               <el-badge :value="statusCounts.all" class="status-count" type="info" v-if="statusCounts.all > 0" />
             </div>
           </template>
@@ -18,7 +18,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Clock /></el-icon>
-              <span>待处理</span>
+              <span>{{ $t('issue.status.pending') }}</span>
               <el-badge :value="statusCounts.pending" class="status-count" type="danger" v-if="statusCounts.pending > 0" />
             </div>
           </template>
@@ -27,7 +27,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Loading /></el-icon>
-              <span>正在处理</span>
+              <span>{{ $t('issue.status.processing') }}</span>
               <el-badge :value="statusCounts.processing" class="status-count" type="warning" v-if="statusCounts.processing > 0" />
             </div>
           </template>
@@ -36,7 +36,7 @@
           <template #label>
             <div class="tab-label">
               <el-icon><Select /></el-icon>
-              <span>已处理</span>
+              <span>{{ $t('issue.status.resolved') }}</span>
               <el-badge :value="statusCounts.resolved" class="status-count" type="success" v-if="statusCounts.resolved > 0" />
             </div>
           </template>
@@ -48,7 +48,7 @@
       <div class="search-bar">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索问题"
+          :placeholder="$t('issue.searchPlaceholder')"
           clearable
           @keyup.enter="handleSearch"
         >
@@ -60,7 +60,7 @@
       
       <el-card v-loading="loading" class="issue-list-card">
         <div v-if="issueList.length === 0 && !loading" class="empty-data">
-          <el-empty :description="`暂无${getStatusLabel(activeStatus)}问题`" />
+          <el-empty :description="`${$t('issue.emptyIssuePrefix')}${getStatusLabel(activeStatus)}${$t('issue.emptyIssueSuffix')}`" />
         </div>
         
         <div v-for="issue in issueList" :key="issue.id" 
@@ -98,8 +98,10 @@ import { useRouter } from 'vue-router'
 import { Search, Document, Clock, Loading, Select } from '@element-plus/icons-vue'
 import { issueApi } from '../../api'
 import { IssueStatus, type Issue } from '../../types'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
+const { t } = useI18n()
 
 // 搜索和过滤
 const searchQuery = ref('')
@@ -139,11 +141,18 @@ const statusOptions = [
 
 // 获取状态标签
 const getStatusLabel = (status: string) => {
-  if (status === 'resolved') return '已处理'
-  if (status === 'processing') return '处理中'
-  
-  // 默认其他状态都显示为待处理
-  return '待处理'
+  switch (status) {
+    case IssueStatus.PENDING:
+      return t('issue.status.pending')
+    case IssueStatus.PROCESSING:
+      return t('issue.status.processing')
+    case IssueStatus.RESOLVED:
+      return t('issue.status.resolved')
+    case IssueStatus.CLOSED:
+      return t('issue.status.closed')
+    default:
+      return t('issue.status.all')
+  }
 }
 
 // 获取状态对应的标签类型

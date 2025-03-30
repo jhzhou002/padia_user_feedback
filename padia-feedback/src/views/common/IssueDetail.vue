@@ -66,7 +66,7 @@
           
           <div class="add-comment">
             <h4>添加评论</h4>
-            <RichTextEditor v-model="commentContent" placeholder="请输入评论内容..." />
+            <QiniuEditor v-model="commentContent" placeholder="请输入评论内容..." />
             <div class="comment-actions">
               <el-button type="primary" @click="addComment">提交评论</el-button>
             </div>
@@ -151,7 +151,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { issueApi, authApi } from '../../api'
 import { IssueStatus, type Issue, type Comment, UserRole, ModuleType } from '../../types'
-import RichTextEditor from '../../components/RichTextEditor.vue'
+import QiniuEditor from '../../components/QiniuEditor.vue'
 
 const route = useRoute()
 const router = useRouter()

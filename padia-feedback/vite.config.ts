@@ -36,7 +36,6 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
-        secure: false,
         rewrite: (path) => path.replace(/^\/api/, ''),
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
@@ -45,7 +44,7 @@ export default defineConfig({
           proxy.on('proxyReq', (proxyReq, req, _res) => {
             console.log('代理请求', req.method, req.url);
           });
-          proxy.on('proxyRes', (_proxyRes, req, _res) => {
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
             console.log('代理响应', req.method, req.url);
           });
         }
@@ -54,7 +53,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
   clearScreen: false
