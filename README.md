@@ -82,8 +82,8 @@ cd padia-feedback
 
 ```bash
 npm install
-# 或
-yarn install
+cd server
+npm install
 ```
 
 3. 开发环境运行
