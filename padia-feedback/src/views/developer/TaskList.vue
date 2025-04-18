@@ -69,9 +69,13 @@
           <div class="task-item-header">
             <span class="task-title">{{ task.issue?.title }}</span>
             <div class="task-user-info">
+              <!-- 添加品牌标签，admin用户除外 -->
+              <span v-if="task.issue?.user?.brand && task.issue?.user?.role !== 'admin'" class="tag-item">
+                <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.brand }}</el-tag>
+              </span>
               <!-- 添加用户工厂信息标签，admin用户除外 -->
               <span v-if="task.issue?.user?.factory && task.issue?.user?.role !== 'admin'" class="tag-item">
-                <el-tag size="small" effect="plain" type="success">{{ task.issue?.user?.factory }}</el-tag>
+                <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.factory }}</el-tag>
               </span>
               <span v-if="task.issue?.user?.email">
                 <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.email }}</el-tag>
