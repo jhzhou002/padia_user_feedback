@@ -148,12 +148,6 @@ padia-feedback/
 3. 遵循Element Plus的设计规范
 4. 确保各角色页面的权限控制正确实现
 
-## 数据库连接信息
-
-- 用户名：tongyong
-- 密码：zhjh0704
-- 地址：101.35.218.174
-- 数据库：padia_user_feedback
 
 ## 协作与贡献
 
