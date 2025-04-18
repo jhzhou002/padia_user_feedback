@@ -5,19 +5,23 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './assets/main.css'
-import { setupI18n } from './i18n'
+
+// 调试信息 - 打印环境信息
+console.log('应用启动 - 环境:', import.meta.env.MODE);
 
 // 创建pinia实例
 const pinia = createPinia()
 
-// 创建应用
+// 初始化应用
 const app = createApp(App)
-app.use(router)
-app.use(ElementPlus)
 app.use(pinia)
 
-// 设置i18n并挂载到应用
-const i18n = setupI18n()
-app.use(i18n)
+// 注册其他插件
+app.use(router)
+app.use(ElementPlus)
 
+// 挂载应用
 app.mount('#app')
+
+// 调试信息 - 应用挂载完成
+console.log('应用挂载完成');

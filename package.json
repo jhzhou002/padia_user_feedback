@@ -3,5 +3,8 @@
     "dotenv": "^16.4.7",
     "mysql2": "^3.14.0",
     "sequelize": "^6.37.6"
+  },
+  "devDependencies": {
+    "vite-plugin-static-copy": "^2.3.1"
   }
 }

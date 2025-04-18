@@ -9,7 +9,7 @@ export const developerApi = {
     search?: string
   }) {
     return request({
-      url: '/tasks',
+      url: '/developer/tasks',
       method: 'get',
       params
     })
@@ -30,6 +30,14 @@ export const developerApi = {
       url: `/comments`,
       method: 'post',
       data: { issueId: taskId, content }
+    })
+  },
+  
+  // 获取统计数据
+  getStatistics() {
+    return request({
+      url: '/developer/statistics',
+      method: 'get'
     })
   }
 }

@@ -1,5 +1,4 @@
 import { fileURLToPath, URL } from 'node:url'
-
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import fs from 'fs'
@@ -24,10 +23,31 @@ const handleError = (error: unknown): string => {
   return '未知错误'
 }
 
+// 检查文件是否存在
+function checkFileExists(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath)
+  } catch (err) {
+    console.error(`Error checking file ${filePath}:`, err)
+    return false
+  }
+}
+
+// 检查关键文件
+const mainPath = path.resolve(__dirname, 'src/main.ts')
+const appPath = path.resolve(__dirname, 'src/App.vue')
+const zhPath = path.resolve(__dirname, 'src/locales/zh.ts')
+const enPath = path.resolve(__dirname, 'src/locales/en.ts')
+console.log(`main.ts exists: ${checkFileExists(mainPath)}`)
+console.log(`App.vue exists: ${checkFileExists(appPath)}`)
+console.log(`zh.ts exists: ${checkFileExists(zhPath)}`)
+console.log(`en.ts exists: ${checkFileExists(enPath)}`)
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/',
   plugins: [
-    vue(),
+    vue()
   ],
   server: {
     host: '0.0.0.0',
@@ -109,6 +129,13 @@ export default defineConfig({
         }
       ]
     }
+  },
+  build: {
+    sourcemap: true,
+    minify: 'terser'
+  },
+  define: {
+    'import.meta.env.VITE_APP_LANG': JSON.stringify('zh-CN') // 确保环境变量注入
   },
   clearScreen: false
 })

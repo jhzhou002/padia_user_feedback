@@ -1,10 +1,12 @@
 <template>
   <div class="developer-layout">
     <header class="header">
-      <div class="logo">{{ $t('common.developerPlatformName') }}</div>
+      <div class="logo">PADIA开发者反馈平台</div>
       <div class="nav">
-        <router-link to="/developer/tasks" class="nav-item">{{ $t('nav.taskList') }}</router-link>
-        <router-link to="/developer/statistics" class="nav-item">{{ $t('nav.statistics') }}</router-link>
+        <router-link to="/developer/tasks" class="nav-item">任务列表</router-link>
+        <router-link v-if="!isAdmin" to="/developer/statistics" class="nav-item">数据统计</router-link>
+        <router-link v-if="isAdmin" to="/developer/admin-statistics" class="nav-item">数据统计</router-link>
+        <router-link v-if="isAdmin" to="/user/submit" class="nav-item">用户页面</router-link>
       </div>
       <div class="user-info">
         <el-dropdown @command="handleCommand" class="user-dropdown">
@@ -14,31 +16,18 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="profile">{{ $t('common.profile') }}</el-dropdown-item>
-              <el-dropdown-item command="language">{{ $t('common.switchLanguage') }}<el-icon class="el-icon--right"><arrow-right /></el-icon></el-dropdown-item>
-              <el-dropdown-item command="logout">{{ $t('common.logout') }}</el-dropdown-item>
+              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-
-        <el-dialog
-          v-model="languageDialogVisible"
-          :title="$t('common.switchLanguage')"
-          width="300px"
-          align-center
-        >
-          <div class="language-options">
-            <el-button @click="changeLanguage('zh-CN')" plain size="large" class="language-btn" :class="{ 'language-active': languageStore.language === 'zh-CN' }">简体中文</el-button>
-            <el-button @click="changeLanguage('en-US')" plain size="large" class="language-btn" :class="{ 'language-active': languageStore.language === 'en-US' }">English</el-button>
-          </div>
-        </el-dialog>
       </div>
     </header>
     <main class="main">
       <router-view />
     </main>
     <footer class="footer">
-      <div>{{ $t('common.copyright') }}</div>
+      <div>© 2025 PADIA User Feedback Platform. All rights reserved.</div>
     </footer>
   </div>
 </template>
@@ -47,16 +36,18 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, User, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowDown, User } from '@element-plus/icons-vue'
 import authApi from '../api/auth'
-import { useLanguageStore, type LanguageType } from '../stores/language'
-import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const username = ref('开发者')
-const languageStore = useLanguageStore()
-const { t } = useI18n()
-const languageDialogVisible = ref(false)
+
+// 判断是否为管理员
+const isAdmin = computed(() => {
+  const localRole = localStorage.getItem('role')
+  console.log("管理员角色判断 - localStorage中的角色:", localRole)
+  return localRole === 'admin'
+})
 
 // 获取用户信息
 const getUserInfo = async () => {
@@ -76,18 +67,8 @@ const handleCommand = (command: string) => {
     handleLogout()
   } else if (command === 'profile') {
     // 跳转到个人中心页面
-    ElMessage.info(t('common.comingSoon'))
-  } else if (command === 'language') {
-    // 打开语言切换对话框
-    languageDialogVisible.value = true
+    ElMessage.info('功能即将上线')
   }
-}
-
-// 切换语言
-const changeLanguage = (lang: LanguageType) => {
-  languageStore.changeLanguage(lang)
-  languageDialogVisible.value = false
-  ElMessage.success(t('common.languageChanged'))
 }
 
 // 退出登录
@@ -188,24 +169,6 @@ onMounted(() => {
 .user-icon {
   margin-right: 4px;
   font-size: 20px;
-}
-
-.language-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: center;
-}
-
-.language-btn {
-  width: 100%;
-  font-size: 16px;
-}
-
-.language-active {
-  border-color: #004a96;
-  color: #004a96;
-  font-weight: bold;
 }
 
 .main {

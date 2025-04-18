@@ -31,6 +31,9 @@ export enum ModuleType {
   STATISTICS = 'statistics',
   INTERNAL_DATA = 'internal_data',
   CONFIGURATION = 'configuration'
+
+  //增加po，即admin也会去回答问题
+  //先欠着，商量下命名
 }
 
 // 模块名称映射
@@ -42,7 +45,7 @@ export const ModuleName: Record<ModuleType, string> = {
   [ModuleType.ISSUE_AND_DIAGNOSIS]: 'Issue and Diagnosis',
   [ModuleType.STATISTICS]: 'Statistics',
   [ModuleType.INTERNAL_DATA]: 'Internal Data',
-  [ModuleType.CONFIGURATION]: 'Configuration'
+  [ModuleType.CONFIGURATION]: 'Configuration',
 }
 
 // 用户信息
@@ -54,6 +57,8 @@ export interface User {
   avatar?: string
   moduleId?: number
   module?: Module
+  factory?: string  // 用户所属工厂
+  brand?: string    // 用户所属品牌
 }
 
 // 功能模块

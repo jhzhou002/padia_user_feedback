@@ -10,20 +10,17 @@
               <el-tag :type="getStatusType(issue.status)" size="small">
                 {{ getStatusText(issue.status) }}
               </el-tag>
-              <el-tag :type="getPriorityType(issue.priority)" size="small" style="margin-left: 8px">
-                {{ getPriorityText(issue.priority) }}
-              </el-tag>
-              <el-tag v-if="issue.isPublic" type="info" size="small" style="margin-left: 8px">{{ $t('issue.detail.public') }}</el-tag>
-              <el-tag v-else type="warning" size="small" style="margin-left: 8px">{{ $t('issue.detail.private') }}</el-tag>
+              <el-tag v-if="issue.isPublic" type="info" size="small" style="margin-left: 8px">公开</el-tag>
+              <el-tag v-else type="warning" size="small" style="margin-left: 8px">私有</el-tag>
             </div>
           </div>
           
           <div class="issue-actions">
             <el-button v-if="canEdit" type="primary" size="small" @click="goToEdit">
-              <el-icon><Edit /></el-icon>{{ $t('common.edit') }}
+              <el-icon><Edit /></el-icon>编辑
             </el-button>
             <el-button v-if="canDelete" type="danger" size="small" @click="confirmDelete">
-              <el-icon><Delete /></el-icon>{{ $t('common.delete') }}
+              <el-icon><Delete /></el-icon>删除
             </el-button>
           </div>
         </div>
@@ -31,19 +28,19 @@
       
       <div class="issue-info">
         <div class="info-item">
-          <span class="info-label">{{ $t('issue.detail.submitter') }}:</span>
-          <span>{{ issue.user?.username || $t('issue.detail.unknownUser') }}</span>
+          <span class="info-label">提交者:</span>
+          <span>{{ issue.user?.username || '未知用户' }}</span>
         </div>
         <div class="info-item">
-          <span class="info-label">{{ $t('issue.detail.module') }}:</span>
-          <span>{{ issue.module?.name || $t('issue.detail.unspecified') }}</span>
+          <span class="info-label">所属模块:</span>
+          <span>{{ issue.module?.name || '未指定' }}</span>
         </div>
         <div class="info-item">
-          <span class="info-label">{{ $t('issue.detail.createTime') }}:</span>
+          <span class="info-label">创建时间:</span>
           <span>{{ formatDate(issue.createdAt) }}</span>
         </div>
         <div class="info-item">
-          <span class="info-label">{{ $t('issue.detail.updateTime') }}:</span>
+          <span class="info-label">更新时间:</span>
           <span>{{ formatDate(issue.updatedAt) }}</span>
         </div>
       </div>
@@ -51,53 +48,48 @@
       <el-divider />
       
       <div class="issue-description">
-        <h3>{{ $t('issue.detail.description') }}</h3>
+        <h3>问题描述</h3>
         <div class="description-content">{{ issue.description }}</div>
       </div>
       
       <!-- 任务状态 (对开发者可见) -->
       <div v-if="isTaskVisible && task" class="issue-task">
         <el-divider />
-        <h3>{{ $t('issue.detail.taskStatus') }}</h3>
+        <h3>任务状态</h3>
         
         <div class="task-info">
           <div class="task-status">
-            <span class="info-label">{{ $t('issue.detail.currentStatus') }}:</span>
+            <span class="info-label">当前状态:</span>
             <el-tag :type="getStatusType(issue.status)">{{ getStatusText(issue.status) }}</el-tag>
           </div>
           
-          <div class="task-priority">
-            <span class="info-label">{{ $t('issue.detail.priority') }}:</span>
-            <el-tag :type="getPriorityType(task.priority)">{{ getPriorityText(task.priority) }}</el-tag>
-          </div>
-          
           <div class="task-assignee">
-            <span class="info-label">{{ $t('issue.detail.assignee') }}:</span>
-            <span>{{ task.developer?.username || $t('issue.detail.unassigned') }}</span>
+            <span class="info-label">负责人:</span>
+            <span>{{ task.developer?.username || '未分配' }}</span>
           </div>
         </div>
         
         <div v-if="isDeveloper" class="task-actions">
           <el-button-group v-if="issue.status === 'pending'">
-            <el-button type="primary" @click="updateStatus('processing')">{{ $t('issue.detail.startProcessing') }}</el-button>
+            <el-button type="primary" @click="updateStatus('processing')">开始处理</el-button>
           </el-button-group>
           
           <el-button-group v-if="issue.status === 'processing'">
-            <el-button type="success" @click="updateStatus('resolved')">{{ $t('issue.detail.markAsResolved') }}</el-button>
+            <el-button type="success" @click="updateStatus('resolved')">标记为已解决</el-button>
           </el-button-group>
           
           <el-button-group v-if="issue.status === 'resolved'">
-            <el-button type="danger" @click="updateStatus('processing')">{{ $t('issue.detail.reopen') }}</el-button>
-            <el-button type="info" @click="updateStatus('closed')">{{ $t('issue.detail.closeTask') }}</el-button>
+            <el-button type="danger" @click="updateStatus('processing')">重新打开</el-button>
+            <el-button type="info" @click="updateStatus('closed')">关闭任务</el-button>
           </el-button-group>
           
           <el-button-group v-if="issue.status === 'closed'">
-            <el-button type="warning" @click="updateStatus('processing')">{{ $t('issue.detail.reopen') }}</el-button>
+            <el-button type="warning" @click="updateStatus('processing')">重新打开</el-button>
           </el-button-group>
         </div>
         
         <div v-if="task.remark" class="task-remark">
-          <span class="info-label">{{ $t('issue.detail.remark') }}:</span>
+          <span class="info-label">备注:</span>
           <div class="remark-content">{{ task.remark }}</div>
         </div>
       </div>
@@ -107,7 +99,7 @@
     <el-card class="comments-card" v-if="issue">
       <template #header>
         <div class="card-header">
-          <h3>{{ $t('issue.detail.comments') }}</h3>
+          <h3>评论区</h3>
         </div>
       </template>
       
@@ -115,10 +107,10 @@
         <div v-for="comment in comments" :key="comment.id" class="comment-item">
           <div class="comment-header">
             <div class="comment-user">
-              <span class="username">{{ comment.user?.username || $t('issue.detail.unknownUser') }}</span>
-              <el-tag size="small" v-if="comment.user?.role === 'admin'">{{ $t('issue.detail.admin') }}</el-tag>
-              <el-tag size="small" type="warning" v-else-if="comment.user?.role === 'developer'">{{ $t('issue.detail.developer') }}</el-tag>
-              <el-tag size="small" type="info" v-else>{{ $t('issue.detail.user') }}</el-tag>
+              <span class="username">{{ comment.user?.username || '未知用户' }}</span>
+              <el-tag size="small" v-if="comment.user?.role === 'admin'">管理员</el-tag>
+              <el-tag size="small" type="warning" v-else-if="comment.user?.role === 'developer'">开发者</el-tag>
+              <el-tag size="small" type="info" v-else>用户</el-tag>
             </div>
             <span class="comment-time">{{ formatDate(comment.createdAt) }}</span>
           </div>
@@ -127,25 +119,25 @@
       </div>
       
       <div v-else class="no-comments">
-        {{ $t('issue.detail.noComments') }}
+        暂无评论，来添加第一条评论吧
       </div>
       
       <!-- 添加评论表单 -->
       <div class="add-comment">
         <el-divider />
-        <h4>{{ $t('issue.detail.addComment') }}</h4>
+        <h4>添加评论</h4>
         <el-form :model="commentForm" ref="commentFormRef">
-          <el-form-item prop="content" :rules="[{ required: true, message: $t('issue.detail.commentRequired'), trigger: 'blur' }]">
+          <el-form-item prop="content" :rules="[{ required: true, message: '请输入评论内容', trigger: 'blur' }]">
             <el-input
               v-model="commentForm.content"
               type="textarea"
               :rows="3"
-              :placeholder="$t('issue.detail.commentPlaceholder')"
+              placeholder="请输入您的评论"
             />
           </el-form-item>
           <el-form-item>
             <el-button type="primary" @click="submitComment" :loading="commentLoading">
-              {{ $t('issue.detail.submitComment') }}
+              提交评论
             </el-button>
           </el-form-item>
         </el-form>
@@ -160,17 +152,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElForm } from 'element-plus'
 import { Edit, Delete } from '@element-plus/icons-vue'
 import { useUserStore } from '../../stores/user'
-import { UserRole, Issue, IssueStatus, IssuePriority, Comment, Task } from '../../types'
-import * as issueApi from '../../api/issues'
-import * as taskApi from '../../api/task'
-import { useI18n } from 'vue-i18n'
-import { useLanguageStore } from '../../stores/language'
+import { UserRole } from '../../types'
+import type { Issue, Comment, Task } from '../../types'
+import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
-const { t } = useI18n()
-const languageStore = useLanguageStore()
 
 // 表单引用
 const commentFormRef = ref<InstanceType<typeof ElForm>>()
@@ -212,7 +200,7 @@ const canEdit = computed(() => {
   if (isAdmin.value) return true
   
   // 创建者可以编辑状态为待处理的问题
-  if (isCreator.value && issue.value.status === IssueStatus.PENDING) {
+  if (isCreator.value && issue.value.status === 'pending') {
     return true
   }
   
@@ -243,8 +231,8 @@ const getIssueDetail = async () => {
   
   loading.value = true
   try {
-    const response = await issueApi.getIssueDetail(issueId.value)
-    issue.value = response.data || null
+    const response = await axios.get(`/api/issues/${issueId.value}`)
+    issue.value = response.data.data || null
     
     // 如果是开发者或管理员，获取任务信息
     if (isDeveloper.value && issue.value) {
@@ -266,8 +254,8 @@ const getTaskInfo = async () => {
   if (!issueId.value) return
   
   try {
-    const response = await taskApi.getTaskByIssueId(issueId.value)
-    task.value = response.data || null
+    const response = await axios.get(`/api/tasks/issue/${issueId.value}`)
+    task.value = response.data.data || null
   } catch (error) {
     console.error('获取任务信息失败:', error)
   }
@@ -278,11 +266,11 @@ const getComments = async () => {
   if (!issueId.value) return
   
   try {
-    const response = await issueApi.getIssueComments(issueId.value)
-    comments.value = response.data || []
+    const response = await axios.get(`/api/issues/${issueId.value}/comments`)
+    comments.value = response.data.data || []
   } catch (error) {
     console.error('获取评论失败:', error)
-    ElMessage.error(t('issue.detail.commentsError'))
+    ElMessage.error('获取评论失败')
   }
 }
 
@@ -294,8 +282,10 @@ const submitComment = async () => {
     if (valid) {
       commentLoading.value = true
       try {
-        await issueApi.addIssueComment(issueId.value, commentForm.value.content)
-        ElMessage.success(t('issue.detail.commentSuccess'))
+        await axios.post(`/api/issues/${issueId.value}/comments`, {
+          content: commentForm.value.content
+        })
+        ElMessage.success('评论提交成功')
         
         // 清空表单
         commentForm.value.content = ''
@@ -304,7 +294,7 @@ const submitComment = async () => {
         await getComments()
       } catch (error) {
         console.error('添加评论失败:', error)
-        ElMessage.error(t('issue.detail.commentError'))
+        ElMessage.error('添加评论失败')
       } finally {
         commentLoading.value = false
       }
@@ -313,18 +303,18 @@ const submitComment = async () => {
 }
 
 // 更新问题状态（开发者功能）
-const updateStatus = async (status: IssueStatus) => {
+const updateStatus = async (status: string) => {
   if (!issueId.value || !issue.value) return
   
   try {
-    await issueApi.updateIssue(issueId.value, { status })
-    ElMessage.success(t('issue.detail.statusUpdateSuccess', { status: getStatusText(status) }))
+    await axios.patch(`/api/issues/${issueId.value}`, { status })
+    ElMessage.success('问题状态更新成功')
     
     // 更新当前问题数据
     await getIssueDetail()
   } catch (error) {
     console.error('更新问题状态失败:', error)
-    ElMessage.error(t('issue.detail.statusUpdateError'))
+    ElMessage.error('更新问题状态失败')
   }
 }
 
@@ -336,11 +326,11 @@ const goToEdit = () => {
 // 确认删除
 const confirmDelete = () => {
   ElMessageBox.confirm(
-    t('issue.detail.deleteConfirm'),
-    t('common.confirm'),
+    '确定要删除这个问题吗？',
+    '确认',
     {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
       type: 'warning'
     }
   )
@@ -357,26 +347,26 @@ const deleteIssue = async () => {
   if (!issueId.value) return
   
   try {
-    await issueApi.deleteIssue(issueId.value)
-    ElMessage.success(t('issue.detail.deleteSuccess'))
+    await axios.delete(`/api/issues/${issueId.value}`)
+    ElMessage.success('问题删除成功')
     router.push('/issues')
   } catch (error) {
     console.error('删除问题失败:', error)
-    ElMessage.error(t('issue.detail.deleteError'))
+    ElMessage.error('删除问题失败')
   }
 }
 
 // 状态映射
 const getStatusText = (status: string) => {
   switch (status) {
-    case IssueStatus.PENDING:
-      return t('issue.status.pending')
-    case IssueStatus.PROCESSING:
-      return t('issue.status.processing')
-    case IssueStatus.RESOLVED:
-      return t('issue.status.resolved')
-    case IssueStatus.CLOSED:
-      return t('issue.status.closed')
+    case 'pending':
+      return '待处理'
+    case 'processing':
+      return '处理中'
+    case 'resolved':
+      return '已解决'
+    case 'closed':
+      return '已关闭'
     default:
       return status
   }
@@ -384,46 +374,20 @@ const getStatusText = (status: string) => {
 
 const getStatusType = (status: string) => {
   const statusTypeMap: Record<string, string> = {
-    [IssueStatus.PENDING]: 'warning',
-    [IssueStatus.PROCESSING]: 'info',
-    [IssueStatus.RESOLVED]: 'success',
-    [IssueStatus.CLOSED]: 'danger'
+    'pending': 'warning',
+    'processing': 'info',
+    'resolved': 'success',
+    'closed': 'danger'
   }
   return statusTypeMap[status] || 'info'
 }
 
-// 优先级映射
-const getPriorityText = (priority: string) => {
-  switch (priority) {
-    case IssuePriority.HIGH:
-      return t('task.priority.high')
-    case IssuePriority.MEDIUM:
-      return t('task.priority.medium')
-    case IssuePriority.LOW:
-      return t('task.priority.low')
-    default:
-      return priority
-  }
-}
-
-const getPriorityType = (priority: string) => {
-  const priorityTypeMap: Record<string, string> = {
-    [IssuePriority.LOW]: 'info',
-    [IssuePriority.MEDIUM]: 'warning',
-    [IssuePriority.HIGH]: 'danger'
-  }
-  return priorityTypeMap[priority] || 'info'
-}
-
 // 格式化日期
 const formatDate = (dateStr: string) => {
-  if (!dateStr) return t('issue.detail.unknownTime');
+  if (!dateStr) return '未知时间';
   const date = new Date(dateStr);
   
-  // 根据当前语言选择日期格式
-  const locale = languageStore.language === 'zh-CN' ? 'zh-CN' : 'en-US';
-  
-  return date.toLocaleString(locale, {
+  return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

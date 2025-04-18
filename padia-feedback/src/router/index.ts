@@ -7,6 +7,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Root',
     redirect: '/auth/login'
   },
+
   {
     path: '/auth',
     name: 'AuthLayout',
@@ -83,6 +84,12 @@ const routes: Array<RouteRecordRaw> = [
         name: 'Statistics',
         component: () => import('../views/developer/Statistics.vue'),
         meta: { title: '数据统计' }
+      },
+      {
+        path: 'admin-statistics',
+        name: 'AdminStatistics',
+        component: () => import('../views/developer/AdminStatistics.vue'),
+        meta: { title: '数据统计', requiresAdmin: true }
       }
     ]
   },
@@ -109,6 +116,17 @@ router.beforeEach((to, from, next) => {
   if (!to.path.startsWith('/auth') && !isAuthenticated) {
     next({ path: '/auth/login' })
   } else {
+    // 检查是否需要管理员权限
+    if (to.meta.requiresAdmin) {
+      const userRole = localStorage.getItem('role')
+      console.log('需要管理员权限:', to.path, '当前用户角色:', userRole)
+      // 如果不是管理员，重定向到开发者主页
+      if (userRole !== 'admin') {
+        console.log('用户不是管理员，重定向到开发者主页')
+        next({ path: '/developer' })
+        return
+      }
+    }
     next()
   }
 })

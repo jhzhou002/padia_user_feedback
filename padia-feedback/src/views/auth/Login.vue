@@ -299,7 +299,7 @@ const handleLogin = async () => {
           // 根据用户角色跳转到不同页面
           const role = userData.user.role
           if (role === 'admin') {
-            router.push('/admin/feedback')
+            router.push('/user/submit')
           } else if (role === 'developer') {
             router.push('/developer/tasks')
           } else {

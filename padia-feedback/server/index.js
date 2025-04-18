@@ -260,6 +260,23 @@ initDatabase().then(async success => {
     } else {
       console.log('issues表已存在rating字段');
     }
+
+    // 检查并添加处理时间相关字段
+    if (!columns.includes('processingAt')) {
+      console.log('正在添加issues表的processingAt字段...');
+      await sequelize.query('ALTER TABLE issues ADD COLUMN processingAt DATETIME NULL DEFAULT NULL');
+      console.log('processingAt字段添加成功');
+    } else {
+      console.log('issues表已存在processingAt字段');
+    }
+
+    if (!columns.includes('resolvedAt')) {
+      console.log('正在添加issues表的resolvedAt字段...');
+      await sequelize.query('ALTER TABLE issues ADD COLUMN resolvedAt DATETIME NULL DEFAULT NULL');
+      console.log('resolvedAt字段添加成功');
+    } else {
+      console.log('issues表已存在resolvedAt字段');
+    }
   } catch (error) {
     console.error('数据库表结构检查/修复失败:', error);
   }
@@ -715,211 +732,677 @@ app.get('/issues/user', authenticateToken, async (req, res) => {
   }
 })
 
-// 获取开发人员任务API
-app.get('/tasks', authenticateToken, checkRole(['developer']), async (req, res) => {
+// 获取开发者的任务列表API
+app.get('/tasks', authenticateToken, checkRole(['developer', 'admin']), async (req, res) => {
   try {
-    const { page = 1, pageSize = 10, status, search } = req.query
-    const developerId = req.user.id
+    const userId = req.user.id
+    const userRole = req.user.role
+    const page = parseInt(req.query.page) || 1
+    const pageSize = parseInt(req.query.pageSize) || 10
+    const status = req.query.status
+    const search = req.query.search || ''
     const offset = (page - 1) * pageSize
-
+    
+    console.log(`【任务列表】开发者(${userId})请求任务列表:`, {
+      page, pageSize, status, search
+    })
+    
+    let tasksWhere = {}
     let issueWhere = {}
     
-    // 处理搜索
-    if (search) {
-      issueWhere.title = { [Op.like]: `%${search}%` }
+    // 如果不是管理员，则只显示分配给自己的任务
+    if (userRole !== UserRole.ADMIN) {
+      tasksWhere.assignedTo = userId
     }
-
+    
     // 处理状态过滤
-    if (status) {
-      if (status === 'pending') {
-        // 对于待处理状态，将除了已处理和处理中的所有状态归为待处理
-        issueWhere.status = {
-          [Op.notIn]: [IssueStatus.RESOLVED, IssueStatus.PROCESSING]
-        }
-      } else {
-        // 处理中和已处理状态直接匹配
-        issueWhere.status = status
-      }
+    if (status && status !== 'all') {
+      issueWhere.status = status
     }
-
-    // 查询开发人员负责的任务总数
-    const counts = {
-      total: 0,
-      pending: 0,
-      processing: 0,
-      resolved: 0,
-      closed: 0
+    
+    // 处理搜索条件
+    if (search) {
+      issueWhere[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } }
+      ]
     }
-
-    // 获取总任务数
-    counts.total = await Task.count({
-      where: { assignedTo: developerId },
-      include: [{ model: Issue, as: 'issue' }]
-    })
-
-    // 获取处理中任务数
-    counts.processing = await Task.count({
-      where: { assignedTo: developerId },
-      include: [{
-        model: Issue,
-        as: 'issue',
-        where: { status: IssueStatus.PROCESSING }
-      }]
-    })
-
-    // 获取已处理任务数
-    counts.resolved = await Task.count({
-      where: { assignedTo: developerId },
-      include: [{
-        model: Issue,
-        as: 'issue',
-        where: { status: IssueStatus.RESOLVED }
-      }]
-    })
-
-    // 获取待处理任务数 - 除了处理中和已处理状态外的所有任务
-    counts.pending = await Task.count({
-      where: { assignedTo: developerId },
-      include: [{
-        model: Issue,
-        as: 'issue',
-        where: {
-          status: {
-            [Op.notIn]: [IssueStatus.RESOLVED, IssueStatus.PROCESSING]
-          }
-        }
-      }]
-    })
-
-    // 查询开发人员负责的任务
-    const { count, rows } = await Task.findAndCountAll({
-      where: { assignedTo: developerId },
+    
+    // 查询任务列表
+    const { count, rows: tasks } = await Task.findAndCountAll({
+      where: tasksWhere,
       include: [
         {
           model: Issue,
           as: 'issue',
           where: issueWhere,
           include: [
-            { model: User, as: 'user', attributes: ['id', 'username', 'avatar', 'email', 'brand', 'factory'] },
-            { model: Module, as: 'module', attributes: ['id', 'name', 'code'] }
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'username', 'email', 'avatar', 'factory', 'brand']
+            },
+            {
+              model: Module,
+              as: 'module',
+              attributes: ['id', 'name', 'code']
+            }
           ]
         },
-        { model: User, as: 'developer', attributes: ['id', 'username', 'avatar'] }
+        {
+          model: User,
+          as: 'developer',
+          attributes: ['id', 'username', 'email', 'avatar']
+        }
       ],
       order: [['createdAt', 'DESC']],
-      limit: parseInt(pageSize),
+      limit: pageSize,
       offset: offset
     })
-
+    
+    // 获取各状态的问题数量
+    const totalTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: search ? issueWhere[Op.or] ? { [Op.and]: [{ [Op.or]: issueWhere[Op.or] }] } : {} : {}
+      }]
+    })
+    
+    const pendingTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'pending',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    const processingTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'processing',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    const resolvedTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'resolved',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    const closedTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'closed',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    console.log(`【任务列表】找到任务数量:`, count)
+    
     res.json({
       code: 200,
       message: '获取任务列表成功',
       data: {
-        tasks: rows,
+        tasks,
         total: count,
-        counts: counts
+        counts: {
+          total: totalTasks,
+          pending: pendingTasks,
+          processing: processingTasks,
+          resolved: resolvedTasks,
+          closed: closedTasks
+        }
       }
     })
   } catch (error) {
-    console.error('获取任务列表错误:', error)
+    console.error('【任务列表】获取任务列表错误:', error)
     res.status(500).json({ code: 500, message: '服务器错误', data: null })
   }
 })
 
-// 获取开发者统计数据API
-app.get('/developer/statistics', authenticateToken, checkRole(['developer', 'admin']), async (req, res) => {
+// 创建developer前缀的任务列表API路由
+app.get('/developer/tasks', authenticateToken, checkRole(['developer', 'admin']), async (req, res) => {
   try {
-    const developerId = req.user.id;
-    console.log(`【开发者统计】获取统计数据，开发者ID: ${developerId}`);
+    const userId = req.user.id
+    const userRole = req.user.role
+    const page = parseInt(req.query.page) || 1
+    const pageSize = parseInt(req.query.pageSize) || 10
+    const status = req.query.status
+    const search = req.query.search || ''
+    const offset = (page - 1) * pageSize
     
-    // 获取开发者负责的所有问题(通过任务关联)
+    console.log(`【任务列表(developer)】开发者(${userId})请求任务列表:`, {
+      page, pageSize, status, search
+    })
+    
+    let tasksWhere = {}
+    let issueWhere = {}
+    
+    // 如果不是管理员，则只显示分配给自己的任务
+    if (userRole !== UserRole.ADMIN) {
+      tasksWhere.assignedTo = userId
+    }
+    
+    // 处理状态过滤
+    if (status && status !== 'all') {
+      issueWhere.status = status
+    }
+    
+    // 处理搜索条件
+    if (search) {
+      issueWhere[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } }
+      ]
+    }
+    
+    // 查询任务列表
+    const { count, rows: tasks } = await Task.findAndCountAll({
+      where: tasksWhere,
+      include: [
+        {
+          model: Issue,
+          as: 'issue',
+          where: issueWhere,
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'username', 'email', 'avatar', 'factory', 'brand']
+            },
+            {
+              model: Module,
+              as: 'module',
+              attributes: ['id', 'name', 'code']
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'developer',
+          attributes: ['id', 'username', 'email', 'avatar']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: pageSize,
+      offset: offset
+    })
+    
+    // 获取各状态的问题数量
+    const totalTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: search ? issueWhere[Op.or] ? { [Op.and]: [{ [Op.or]: issueWhere[Op.or] }] } : {} : {}
+      }]
+    })
+    
+    const pendingTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'pending',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    const processingTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'processing',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    const resolvedTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'resolved',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    const closedTasks = await Task.count({
+      where: tasksWhere,
+      include: [{
+        model: Issue,
+        as: 'issue',
+        where: {
+          status: 'closed',
+          ...(search ? { [Op.or]: issueWhere[Op.or] } : {})
+        }
+      }]
+    })
+    
+    console.log(`【任务列表(developer)】找到任务数量:`, count)
+    
+    res.json({
+      code: 200,
+      message: '获取任务列表成功',
+      data: {
+        tasks,
+        total: count,
+        counts: {
+          total: totalTasks,
+          pending: pendingTasks,
+          processing: processingTasks,
+          resolved: resolvedTasks,
+          closed: closedTasks
+        }
+      }
+    })
+  } catch (error) {
+    console.error('【任务列表(developer)】获取任务列表错误:', error)
+    res.status(500).json({ code: 500, message: '服务器错误', data: null })
+  }
+})
+
+// 获取开发者统计数据
+app.get('/developer/statistics', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    
+    console.log(`获取开发者统计数据: 用户ID=${userId}, 角色=${req.user.role}, 是否管理员=${isAdmin}`);
+
+    // 查询所有开发者任务
     const developerTasks = await Task.findAll({
-      where: { assignedTo: developerId },
-      include: [{ model: Issue, as: 'issue' }]
-    });
-    
-    // 提取问题ID
-    const issueIds = developerTasks.map(task => task.issue ? task.issue.id : null).filter(id => id !== null);
-    
-    // 获取这些问题的详细信息
-    const issues = await Issue.findAll({
-      where: { id: { [Op.in]: issueIds } },
-      attributes: [
-        'id', 'status', 'createdAt', 'updatedAt', 'rating',
-        [sequelize.fn('TIMESTAMPDIFF', sequelize.literal('HOUR'), sequelize.col('createdAt'), sequelize.literal('CASE WHEN status="viewed" OR status="processing" OR status="resolved" THEN updatedAt ELSE NOW() END')), 'responseTime'],
-        [sequelize.fn('TIMESTAMPDIFF', sequelize.literal('HOUR'), sequelize.col('createdAt'), sequelize.literal('CASE WHEN status="resolved" THEN updatedAt ELSE NOW() END')), 'resolveTime']
+      include: [
+        {
+          model: User,
+          as: 'developer',
+          attributes: ['id', 'username', 'email', 'avatar']
+        },
+        {
+          model: Issue,
+          as: 'issue'
+        }
       ]
     });
-    
-    // 统计各种指标
-    const totalIssues = issues.length;
-    // 待处理计数包含所有非处理中和非已处理的任务
-    const pendingIssues = issues.filter(issue => 
-      ![IssueStatus.PROCESSING, IssueStatus.RESOLVED].includes(issue.status)
-    ).length;
-    const processingIssues = issues.filter(issue => issue.status === IssueStatus.PROCESSING).length;
-    const resolvedIssues = issues.filter(issue => issue.status === IssueStatus.RESOLVED).length;
-    
-    // 处理评分相关统计
-    const ratedIssues = issues.filter(issue => issue.rating !== null && issue.rating > 0);
-    const ratingsCount = ratedIssues.length;
-    const totalRating = ratedIssues.reduce((sum, issue) => sum + issue.rating, 0);
-    const averageRating = ratingsCount > 0 ? (totalRating / ratingsCount).toFixed(1) : 0;
-    
-    // 统计评分分布
-    const ratingsDistribution = {
-      '1': ratedIssues.filter(issue => issue.rating === 1).length,
-      '2': ratedIssues.filter(issue => issue.rating === 2).length,
-      '3': ratedIssues.filter(issue => issue.rating === 3).length,
-      '4': ratedIssues.filter(issue => issue.rating === 4).length,
-      '5': ratedIssues.filter(issue => issue.rating === 5).length
-    };
-    
-    // 计算平均响应时间和解决时间
-    const respondedIssues = issues.filter(issue => 
-      issue.status === IssueStatus.VIEWED || 
-      issue.status === IssueStatus.PROCESSING || 
-      issue.status === IssueStatus.RESOLVED
-    );
-    
-    const resolvedIssuesData = issues.filter(issue => issue.status === IssueStatus.RESOLVED);
-    
-    // 计算平均响应时间（小时）
-    const totalResponseTime = respondedIssues.reduce((sum, issue) => {
-      const responseTime = issue.dataValues.responseTime;
-      return sum + (responseTime || 0);
-    }, 0);
-    
-    // 计算平均解决时间（小时）
-    const totalResolveTime = resolvedIssuesData.reduce((sum, issue) => {
-      const resolveTime = issue.dataValues.resolveTime;
-      return sum + (resolveTime || 0);
-    }, 0);
-    
-    const responseTime = respondedIssues.length > 0 ? (totalResponseTime / respondedIssues.length).toFixed(1) : 0;
-    const resolveTime = resolvedIssuesData.length > 0 ? (totalResolveTime / resolvedIssuesData.length).toFixed(1) : 0;
-    
-    // 返回统计数据
-    res.json({
+
+    console.log(`找到开发者任务: ${developerTasks.length}个`);
+
+    // 如果用户是管理员，获取所有开发者的统计数据
+    if (isAdmin) {
+      console.log('管理员视图: 处理统计数据');
+      
+      // 分组统计每个开发者的问题状态
+      const developerStats = [];
+      const developerMap = new Map();
+      
+      for (const task of developerTasks) {
+        const developerId = task.assignedTo;
+        const developer = task.developer;
+        
+        if (!developerMap.has(developerId)) {
+          developerMap.set(developerId, {
+            developer: {
+              id: developer.id,
+              username: developer.username,
+              email: developer.email,
+              avatar: developer.avatar
+            },
+            totalIssues: 0,
+            pendingIssues: 0,
+            processingIssues: 0,
+            resolvedIssues: 0,
+            ratingsCount: 0,
+            averageRating: '0.0',
+            responseTime: '0.0',
+            resolveTime: '0.0',
+            ratingSum: 0,
+            respondedIssues: 0,
+            resolvedIssuesWithTime: 0,
+            responseTimeSum: 0,
+            resolveTimeSum: 0
+          });
+        }
+        
+        const stats = developerMap.get(developerId);
+        stats.totalIssues++;
+        
+        if (task.issue) {
+          // 统计各状态问题数量
+          switch (task.issue.status) {
+            case 'pending':
+              stats.pendingIssues++;
+              break;
+            case 'processing':
+              stats.processingIssues++;
+              break;
+            case 'resolved':
+              stats.resolvedIssues++;
+              
+              // 统计评分
+              if (task.issue.rating > 0) {
+                stats.ratingsCount++;
+                stats.ratingSum += task.issue.rating;
+              }
+              
+              // 响应时间和解决时间计算逻辑
+              if (task.issue.processingAt && task.issue.createdAt) {
+                const responseTime = (new Date(task.issue.processingAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+                if (responseTime >= 0) {
+                  stats.respondedIssues++;
+                  stats.responseTimeSum += responseTime;
+                }
+              }
+              
+              if (task.issue.status === 'resolved' && task.issue.resolvedAt && task.issue.createdAt) {
+                const resolveTime = (new Date(task.issue.resolvedAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+                if (resolveTime >= 0) {
+                  stats.resolvedIssuesWithTime++;
+                  stats.resolveTimeSum += resolveTime;
+                }
+              }
+              break;
+          }
+        }
+      }
+      
+      // 计算平均评分和响应/解决时间
+      for (const [developerId, stats] of developerMap) {
+        if (stats.ratingsCount > 0) {
+          stats.averageRating = (stats.ratingSum / stats.ratingsCount).toFixed(1);
+        }
+        
+        if (stats.respondedIssues > 0) {
+          stats.responseTime = (stats.responseTimeSum / stats.respondedIssues).toFixed(1);
+        }
+        
+        if (stats.resolvedIssuesWithTime > 0) {
+          stats.resolveTime = (stats.resolveTimeSum / stats.resolvedIssuesWithTime).toFixed(1);
+        }
+        
+        // 删除内部计算字段
+        delete stats.ratingSum;
+        delete stats.respondedIssues;
+        delete stats.resolvedIssuesWithTime;
+        delete stats.responseTimeSum;
+        delete stats.resolveTimeSum;
+        
+        developerStats.push(stats);
+      }
+      
+      // 计算总体统计数据
+      const totalIssues = developerStats.reduce((sum, dev) => sum + dev.totalIssues, 0);
+      const pendingIssues = developerStats.reduce((sum, dev) => sum + dev.pendingIssues, 0);
+      const processingIssues = developerStats.reduce((sum, dev) => sum + dev.processingIssues, 0);
+      const resolvedIssues = developerStats.reduce((sum, dev) => sum + dev.resolvedIssues, 0);
+      
+      // 计算评分分布和平均评分
+      let totalRatings = 0;
+      let totalRatingSum = 0;
+      const ratingsDistribution = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+      
+      for (const task of developerTasks) {
+        if (task.issue && task.issue.rating > 0) {
+          totalRatings++;
+          totalRatingSum += task.issue.rating;
+          
+          // 更新评分分布
+          const rating = Math.floor(task.issue.rating);
+          if (rating >= 1 && rating <= 5) {
+            ratingsDistribution[rating]++;
+          }
+        }
+      }
+      
+      const averageRating = totalRatings > 0 ? (totalRatingSum / totalRatings).toFixed(1) : '0.0';
+      
+      // 计算总体响应时间和解决时间
+      let totalResponseTimeSum = 0;
+      let totalResolveTimeSum = 0;
+      let totalRespondedIssues = 0;
+      let totalResolvedIssuesWithTime = 0;
+      
+      for (const task of developerTasks) {
+        if (task.issue) {
+          // 响应时间：开发人员将问题状态更新为processing时间 - 问题提交时间
+          if (task.issue.processingAt && task.issue.createdAt) {
+            const responseTime = (new Date(task.issue.processingAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+            if (responseTime >= 0) {
+              totalRespondedIssues++;
+              totalResponseTimeSum += responseTime;
+            }
+          }
+          
+          // 解决时间：问题状态更新为resolved时间 - 问题提交时间
+          if (task.issue.status === 'resolved' && task.issue.resolvedAt && task.issue.createdAt) {
+            const resolveTime = (new Date(task.issue.resolvedAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+            if (resolveTime >= 0) {
+              totalResolvedIssuesWithTime++;
+              totalResolveTimeSum += resolveTime;
+            }
+          }
+        }
+      }
+      
+      // 平均响应时间=总响应时间/响应个数（即状态更新为正在处理+已解决的总个数）
+      const avgResponseTime = totalRespondedIssues > 0 ? (totalResponseTimeSum / totalRespondedIssues).toFixed(1) : '0.0';
+      // 平均解决时间=总解决时间/解决问题个数
+      const avgResolveTime = totalResolvedIssuesWithTime > 0 ? (totalResolveTimeSum / totalResolvedIssuesWithTime).toFixed(1) : '0.0';
+      
+      return res.json({
       code: 200,
       message: '获取开发者统计数据成功',
       data: {
+          summary: {
         totalIssues,
         pendingIssues,
         processingIssues,
         resolvedIssues,
-        ratingsCount,
+            ratingsCount: totalRatings,
         averageRating,
         ratingsDistribution,
-        responseTime,
-        resolveTime
+            avgResponseTime,
+            avgResolveTime
+          },
+          developers: developerStats
+        }
+      });
+    } else {
+      // 普通开发者只看到自己的数据
+      console.log('开发者视图: 处理统计数据');
+      
+      // 筛选当前开发者的任务
+      const userTasks = developerTasks.filter(task => task.assignedTo === userId);
+      console.log(`找到当前开发者任务: ${userTasks.length}个`);
+      
+      // 总体统计数据
+      const totalIssues = developerTasks.length;
+      const pendingIssues = developerTasks.filter(task => task.issue && task.issue.status === 'pending').length;
+      const processingIssues = developerTasks.filter(task => task.issue && task.issue.status === 'processing').length;
+      const resolvedIssues = developerTasks.filter(task => task.issue && task.issue.status === 'resolved').length;
+      
+      // 计算评分分布和平均评分
+      let totalRatings = 0;
+      let totalRatingSum = 0;
+      const ratingsDistribution = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+      
+      for (const task of developerTasks) {
+        if (task.issue && task.issue.rating > 0) {
+          totalRatings++;
+          totalRatingSum += task.issue.rating;
+          
+          // 更新评分分布
+          const rating = Math.floor(task.issue.rating);
+          if (rating >= 1 && rating <= 5) {
+            ratingsDistribution[rating]++;
+          }
+        }
       }
-    });
+      
+      const overallAverageRating = totalRatings > 0 ? (totalRatingSum / totalRatings).toFixed(1) : '0.0';
+      
+      // 当前开发者统计
+      let userTotalIssues = 0;
+      let userPendingIssues = 0;
+      let userProcessingIssues = 0;
+      let userResolvedIssues = 0;
+      let userRatingsCount = 0;
+      let userRatingSum = 0;
+      let userRespondedIssues = 0;
+      let userResolvedIssuesWithTime = 0;
+      let userResponseTimeSum = 0;
+      let userResolveTimeSum = 0;
+      const userRatingsDistribution = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+      
+      for (const task of userTasks) {
+        userTotalIssues++;
+        
+        if (task.issue) {
+          // 统计各状态问题数量
+          switch (task.issue.status) {
+            case 'pending':
+              userPendingIssues++;
+              break;
+            case 'processing':
+              userProcessingIssues++;
+              break;
+            case 'resolved':
+              userResolvedIssues++;
+              
+              // 统计评分
+              if (task.issue.rating > 0) {
+                userRatingsCount++;
+                userRatingSum += task.issue.rating;
+                
+                // 更新评分分布
+                const rating = Math.floor(task.issue.rating);
+                if (rating >= 1 && rating <= 5) {
+                  userRatingsDistribution[rating]++;
+                }
+              }
+              
+              // 响应时间和解决时间计算逻辑
+              if (task.issue.processingAt && task.issue.createdAt) {
+                const responseTime = (new Date(task.issue.processingAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+                if (responseTime >= 0) {
+                  userRespondedIssues++;
+                  userResponseTimeSum += responseTime;
+                }
+              }
+              
+              if (task.issue.status === 'resolved' && task.issue.resolvedAt && task.issue.createdAt) {
+                const resolveTime = (new Date(task.issue.resolvedAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+                if (resolveTime >= 0) {
+                  userResolvedIssuesWithTime++;
+                  userResolveTimeSum += resolveTime;
+                }
+              }
+              break;
+          }
+        }
+      }
+      
+      // 计算开发者平均评分和响应/解决时间
+      const userAverageRating = userRatingsCount > 0 ? (userRatingSum / userRatingsCount).toFixed(1) : '0.0';
+      const userResponseTime = userRespondedIssues > 0 ? (userResponseTimeSum / userRespondedIssues).toFixed(1) : '0.0';
+      const userResolveTime = userResolvedIssuesWithTime > 0 ? (userResolveTimeSum / userResolvedIssuesWithTime).toFixed(1) : '0.0';
+      
+      // 计算总体响应时间和解决时间
+      let totalResponseTimeSum = 0;
+      let totalResolveTimeSum = 0;
+      let totalRespondedIssues = 0;
+      let totalResolvedIssuesWithTime = 0;
+      
+      for (const task of developerTasks) {
+        if (task.issue) {
+          // 响应时间：开发人员将问题状态更新为processing时间 - 问题提交时间
+          if (task.issue.processingAt && task.issue.createdAt) {
+            const responseTime = (new Date(task.issue.processingAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+            if (responseTime >= 0) {
+              totalRespondedIssues++;
+              totalResponseTimeSum += responseTime;
+            }
+          }
+          
+          // 解决时间：问题状态更新为resolved时间 - 问题提交时间
+          if (task.issue.status === 'resolved' && task.issue.resolvedAt && task.issue.createdAt) {
+            const resolveTime = (new Date(task.issue.resolvedAt) - new Date(task.issue.createdAt)) / (1000 * 60 * 60);
+            if (resolveTime >= 0) {
+              totalResolvedIssuesWithTime++;
+              totalResolveTimeSum += resolveTime;
+            }
+          }
+        }
+      }
+      
+      // 平均响应时间=总响应时间/响应个数（即状态更新为正在处理+已解决的总个数）
+      const avgResponseTime = totalRespondedIssues > 0 ? (totalResponseTimeSum / totalRespondedIssues).toFixed(1) : '0.0';
+      // 平均解决时间=总解决时间/解决问题个数
+      const avgResolveTime = totalResolvedIssuesWithTime > 0 ? (totalResolveTimeSum / totalResolvedIssuesWithTime).toFixed(1) : '0.0';
+      
+      return res.json({
+        code: 200,
+        message: '获取开发者统计数据成功',
+        data: {
+          summary: {
+            totalIssues,
+            pendingIssues,
+            processingIssues,
+            resolvedIssues,
+            ratingsCount: totalRatings,
+            averageRating: overallAverageRating,
+            ratingsDistribution,
+            avgResponseTime,
+            avgResolveTime
+          },
+          totalIssues: userTotalIssues,
+          pendingIssues: userPendingIssues,
+          processingIssues: userProcessingIssues,
+          resolvedIssues: userResolvedIssues,
+          ratingsCount: userRatingsCount,
+          averageRating: userAverageRating,
+          responseTime: userResponseTime,
+          resolveTime: userResolveTime,
+          ratingsDistribution: userRatingsDistribution
+        }
+      });
+    }
   } catch (error) {
     console.error('获取开发者统计数据错误:', error);
-    res.status(500).json({ code: 500, message: '服务器错误', data: null });
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误，请稍后重试',
+      data: null
+    });
   }
-})
+});
 
 // 获取热门问题API
 app.get('/issues/hot', async (req, res) => {
@@ -1150,6 +1633,21 @@ app.put('/issues/:id/status', authenticateToken, checkRole(['developer', 'admin'
     }
     
     console.log(`【状态更新】当前状态:`, issue.status, '目标状态:', status)
+    
+    // 记录状态变更的时间
+    const now = new Date();
+    
+    // 如果状态从非处理中变为处理中，记录处理开始时间
+    if (status === 'processing' && issue.status !== 'processing' && !issue.processingAt) {
+      issue.processingAt = now;
+      console.log(`【状态更新】记录处理开始时间:`, now);
+    }
+    
+    // 如果状态变为已解决，记录解决时间
+    if (status === 'resolved' && issue.status !== 'resolved') {
+      issue.resolvedAt = now;
+      console.log(`【状态更新】记录解决时间:`, now);
+    }
     
     issue.status = status
     await issue.save()
@@ -1411,8 +1909,8 @@ import * as logger from './utils/logger.js';
 // 测试发送邮件接口 - 用于测试或开发环境发送邮件
 app.get('/test-email', async (req, res) => {
   const { email, subject, content } = req.query;
-  
-  if (!email) {
+    
+    if (!email) {
     logger.warn(`测试邮件请求未提供email参数`);
     return res.status(400).json({ success: false, message: '缺少必要的email参数' });
   }

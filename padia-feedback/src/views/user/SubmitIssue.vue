@@ -1,16 +1,16 @@
 <template>
   <div class="page-container">
-    <h1 class="page-title">{{ $t('nav.submitIssue') }}</h1>
+    <h1 class="page-title">提交问题</h1>
     <div class="card">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
         <el-form-item v-if="form.title">
           <div class="title-preview">
-            <strong>{{ $t('form.generatedTitle', '自动生成标题') }}:</strong> {{ form.title }}
+            <strong>自动生成标题:</strong> {{ form.title }}
           </div>
         </el-form-item>
         
-        <el-form-item :label="$t('form.module')" prop="moduleId">
-          <el-select v-model="form.moduleId" :placeholder="$t('form.selectModule')" style="width: 100%" @change="updateTitle">
+        <el-form-item label="所属模块" prop="moduleId">
+          <el-select v-model="form.moduleId" placeholder="请选择所属模块" style="width: 100%" @change="updateTitle">
             <el-option 
               v-for="module in moduleOptions" 
               :key="module.id" 
@@ -20,17 +20,17 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item :label="$t('form.issueDescription')" prop="description">
-          <QiniuEditor v-model="form.description" :placeholder="$t('form.detailDescription')" @update:modelValue="generateTitle" />
+        <el-form-item label="问题描述" prop="description">
+          <QiniuEditor v-model="form.description" placeholder="请详细描述您遇到的问题..." @update:modelValue="generateTitle" />
         </el-form-item>
         
         <el-form-item>
-          <el-checkbox v-model="form.isPublic">{{ $t('form.isPublic') }}</el-checkbox>
+          <el-checkbox v-model="form.isPublic">在处理完成后公开此问题</el-checkbox>
         </el-form-item>
         
         <el-form-item>
-          <el-button type="primary" @click="handleSubmit" :loading="loading">{{ $t('form.submit') }}</el-button>
-          <el-button @click="resetForm">{{ $t('common.reset') }}</el-button>
+          <el-button type="primary" @click="handleSubmit" :loading="loading">提交</el-button>
+          <el-button @click="resetForm">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -41,12 +41,10 @@
 import { ref, onMounted, watchEffect } from 'vue'
 import { ElMessage } from 'element-plus'
 import QiniuEditor from '../../components/QiniuEditor.vue'
-import { issueApi } from '../../api'
 import { moduleApi } from '../../api'
 import { useRouter } from 'vue-router'
 import type { Module } from '../../types'
-import { useI18n } from 'vue-i18n'
-import { extractTitleWithModule, findKeywords, generateTitleFromKeywords, cleanHtml } from '../../utils/textProcessing'
+import { extractTitleWithModule, cleanHtml, findKeywords } from '../../utils/textProcessing'
 import axios from 'axios'
 
 // 表单引用
@@ -170,13 +168,13 @@ const handleSubmit = async () => {
           if (response.data.emailSent === true) {
             ElMessage({
               type: 'success',
-              message: t('form.email_sent_success', '邮件通知已发送给负责的开发者'),
+              message: '邮件通知已发送给负责的开发者',
               duration: 4000
             });
           } else {
             ElMessage({
               type: 'warning',
-              message: t('form.email_sent_fail', '邮件通知发送失败，但问题已成功提交'),
+              message: '邮件通知发送失败，但问题已成功提交',
               duration: 4000
             });
           }
@@ -214,7 +212,6 @@ const resetForm = () => {
 }
 
 const router = useRouter()
-const { t } = useI18n()
 
 // 页面加载时获取模块列表
 onMounted(() => {
@@ -248,11 +245,10 @@ watchEffect(() => {
 }
 
 .title-preview {
+  margin-bottom: 20px;
   padding: 10px;
   background-color: #f8f9fa;
   border-radius: 4px;
-  border-left: 3px solid #409EFF;
-  font-size: 14px;
-  color: #606266;
+  font-size: 16px;
 }
 </style> 

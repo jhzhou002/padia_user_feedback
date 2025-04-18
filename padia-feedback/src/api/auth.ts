@@ -3,6 +3,9 @@ import type { AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '../router'
 
+//弹窗的组件
+import { ElMessageBox } from 'element-plus'
+
 // 用户角色类型
 export type UserRole = 'user' | 'developer' | 'admin'
 
@@ -31,8 +34,19 @@ export type LoginResponse = ApiResponse<LoginData>
 // 认证相关API
 const authApi = {
   // 登录
+
+  /* 原代码
   login(data: { username: string; password: string }): Promise<AxiosResponse<LoginResponse>> {
     console.log('发起登录请求:', data)
+    return request<LoginResponse>({
+      url: '/auth/login',
+      method: 'post',
+      data
+    })
+  */ 
+ 
+  //修改后的代码
+  login(data: { username: string; password: string }): Promise<AxiosResponse<LoginResponse>> {
     return request<LoginResponse>({
       url: '/auth/login',
       method: 'post',

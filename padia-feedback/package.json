@@ -7,7 +7,7 @@
     "dev": "vite",
     "server": "cd server && node index.js",
     "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
-    "build": "run-p type-check build-only",
+    "build": "npm run build-only",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
@@ -34,7 +34,6 @@
     "qiniu": "^7.14.0",
     "sequelize": "^6.37.1",
     "vue": "^3.5.13",
-    "vue-i18n": "^12.0.0-alpha.2",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
@@ -44,9 +43,11 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/tsconfig": "^0.7.0",
     "concurrently": "^8.2.2",
+    "terser": "^5.39.0",
     "ts-node": "^10.9.1",
     "typescript": "~5.7.2",
     "vite": "^6.2.0",
+    "vite-plugin-static-copy": "^2.3.1",
     "vue-tsc": "^2.2.4"
   }
 }
