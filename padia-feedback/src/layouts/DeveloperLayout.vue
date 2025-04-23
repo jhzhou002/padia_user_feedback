@@ -9,6 +9,7 @@
         <router-link v-if="isAdmin" to="/user/submit" class="nav-item">用户页面</router-link>
       </div>
       <div class="user-info">
+        <notification-badge />
         <el-dropdown @command="handleCommand" class="user-dropdown">
           <span class="user-dropdown-link">
             <el-icon class="user-icon"><User /></el-icon>
@@ -38,6 +39,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, User } from '@element-plus/icons-vue'
 import authApi from '../api/auth'
+import NotificationBadge from '../components/NotificationBadge.vue'
 
 const router = useRouter()
 const username = ref('开发者')

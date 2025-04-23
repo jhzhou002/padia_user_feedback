@@ -18,7 +18,6 @@
           <h3>状态追踪</h3>
           <el-steps :active="getStatusStep(issue.status)" finish-status="success" process-status="success">
             <el-step title="待处理" description="问题已提交" />
-            <el-step title="已查看" description="开发人员已查看" />
             <el-step title="处理中" description="开发人员正在处理" />
             <el-step title="已处理" description="问题解决完成" />
           </el-steps>
@@ -84,18 +83,12 @@
             >
               设为处理中
             </el-button>
-          </div>
-        </div>
-        
-        <!-- 用户设置为已处理按钮 -->
-        <div class="issue-actions" v-if="!isDeveloper && issue.status === IssueStatus.PROCESSING">
-          <h3>问题处理状态</h3>
-          <div class="status-actions">
             <el-button 
               type="success" 
-              @click="showRatingDialog"
+              @click="resolveIssue"
+              :disabled="issue.status === IssueStatus.PENDING"
             >
-              问题已解决
+              标记为已解决
             </el-button>
           </div>
         </div>
@@ -113,35 +106,6 @@
         </el-result>
       </div>
     </div>
-    
-    <!-- 处理评价对话框 -->
-    <el-dialog
-      v-model="ratingDialogVisible"
-      title="问题处理评价"
-      width="400px"
-      center
-    >
-      <div class="rating-container">
-        <p>请对问题处理满意度进行评分：</p>
-        <div class="rating-stars">
-          <el-rate
-            v-model="ratingValue"
-            :colors="ratingColors"
-            :texts="ratingTexts"
-            show-text
-          />
-        </div>
-        <p class="rating-tip">点击星星即可评价</p>
-      </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="ratingDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitRating">
-            确认并标记为已处理
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -165,17 +129,10 @@ const isDeveloper = computed(() => !!route.meta.isDeveloper)
 // 加载状态
 const loading = ref(false)
 
-// 评价对话框
-const ratingDialogVisible = ref(false)
-const ratingValue = ref(5)
-const ratingColors = ['#F56C6C', '#F56C6C', '#E6A23C', '#E6A23C', '#67C23A']
-const ratingTexts = ['很差', '较差', '一般', '满意', '非常满意']
-
 // 问题信息的扩展接口，确保包含评论和其他可能的属性
-interface IssueWithComments extends Omit<Issue, 'module'> {
+interface IssueWithComments extends Issue {
   comments?: Comment[];
   attachments?: string[];
-  // 确保这些属性在类型中明确定义
   module?: {
     id: number;
     name: string;
@@ -205,14 +162,12 @@ const getStatusStep = (status: string) => {
   switch (status) {
     case IssueStatus.PENDING:
       return 0
-    case IssueStatus.VIEWED:
-      return 1
     case IssueStatus.PROCESSING:
-      return 2
+      return 1
     case IssueStatus.RESOLVED:
-      return 3
+      return 2
     case IssueStatus.CLOSED:
-      return 4
+      return 3
     default:
       return 0
   }
@@ -222,7 +177,6 @@ const getStatusStep = (status: string) => {
 const getStatusLabel = (status: string) => {
   const statusLabels = {
     [IssueStatus.PENDING]: '待处理',
-    [IssueStatus.VIEWED]: '已查看',
     [IssueStatus.PROCESSING]: '处理中',
     [IssueStatus.RESOLVED]: '已处理',
     [IssueStatus.CLOSED]: '已关闭'
@@ -234,8 +188,6 @@ const getStatusLabel = (status: string) => {
 const getStatusType = (status: string) => {
   switch (status) {
     case IssueStatus.PENDING:
-      return 'info'
-    case IssueStatus.VIEWED:
       return 'info'
     case IssueStatus.PROCESSING:
       return 'warning'
@@ -334,11 +286,6 @@ const fetchIssueDetail = async () => {
       
       // 设置状态
       issue.value = frontendIssueData
-      
-      // 如果是开发人员且状态是待处理，自动更新为已查看
-      if (isDeveloper.value && issue.value.status === IssueStatus.PENDING) {
-        updateIssueStatus(IssueStatus.VIEWED)
-      }
     } else {
       issue.value = null
       ElMessage.error('获取问题详情失败')
@@ -422,37 +369,24 @@ const updateIssueStatus = async (newStatus: IssueStatus) => {
   }
 }
 
-// 显示评价对话框
-const showRatingDialog = () => {
-  ratingDialogVisible.value = true
-}
-
-// 提交评价并更新状态
-const submitRating = async () => {
-  if (ratingValue.value < 1) {
-    ElMessage.warning('请至少选择一颗星进行评价')
-    return
-  }
+// 解决问题
+const resolveIssue = async () => {
+  if (!issue.value) return
   
-  // 提交评价
   try {
-    // 调用评价API
-    const response = await issueApi.submitRating(parseInt(issueId.value), ratingValue.value)
+    console.log('准备解决问题:', { 
+      问题ID: issueId.value, 
+      当前状态: issue.value.status, 
+      目标状态: IssueStatus.RESOLVED
+    })
     
-    if (response?.data?.code === 200) {
-      // 重新获取问题详情，包含最新状态
-      await fetchIssueDetail()
-      
-      // 关闭对话框
-      ratingDialogVisible.value = false
-      
-      ElMessage.success('感谢您的评价！问题已标记为已处理')
-    } else {
-      ElMessage.error('提交评价失败')
-    }
+    // 更新问题状态
+    await updateIssueStatus(IssueStatus.RESOLVED)
+    
+    ElMessage.success('问题已解决')
   } catch (error) {
-    console.error('提交评价失败:', error)
-    ElMessage.error('提交评价失败')
+    console.error('解决问题失败:', error)
+    ElMessage.error('解决问题失败')
   }
 }
 
@@ -622,28 +556,5 @@ onMounted(() => {
 
 .not-found {
   padding: 40px 0;
-}
-
-/* 评价对话框样式 */
-.rating-container {
-  text-align: center;
-  padding: 10px 0;
-}
-
-.rating-stars {
-  margin: 20px 0;
-}
-
-.rating-tip {
-  color: #909399;
-  font-size: 12px;
-  margin-top: 10px;
-}
-
-.dialog-footer {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  gap: 20px;
 }
 </style> 

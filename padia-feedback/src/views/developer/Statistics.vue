@@ -9,7 +9,7 @@
         </template>
         <template #description>
           <p>您暂时没有任何统计数据</p>
-          <p>随着更多问题的处理，这里将显示您的处理效率和用户满意度</p>
+          <p>随着更多问题的处理，这里将显示您的处理效率</p>
         </template>
       </el-empty>
       
@@ -63,60 +63,12 @@
           </div>
         </el-col>
         
-        <!-- 满意度评价区域 -->
-        <el-col :span="24" :lg="12">
-          <div class="data-section">
-            <h2>用户满意度</h2>
-            <el-card shadow="hover">
-              <div class="satisfaction-container">
-                <div class="rating-summary">
-                  <div class="average-rating">
-                    <div class="rating-value">{{ statistics.averageRating }}</div>
-                    <div class="rating-stars">
-                      <el-rate
-                        v-model="avgRating"
-                        disabled
-                        show-score
-                        text-color="#ff9900"
-                        :colors="ratingColors"
-                      />
-                    </div>
-                    <div class="rating-count">
-                      共{{ statistics.ratingsCount }}条评价
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="rating-distribution">
-                  <div 
-                    v-for="i in 5" 
-                    :key="i" 
-                    class="rating-bar-container"
-                  >
-                    <span class="rating-label">{{ i }}星</span>
-                    <div class="rating-bar-wrapper">
-                      <div 
-                        class="rating-bar" 
-                        :style="{
-                          width: getRatingPercentage(i) + '%',
-                          backgroundColor: i >= 4 ? '#67C23A' : (i >= 3 ? '#E6A23C' : '#F56C6C')
-                        }"
-                      ></div>
-                    </div>
-                    <span class="rating-count-label">{{ getRatingCount(i) }}个 ({{ getRatingPercentage(i) }}%)</span>
-                  </div>
-                </div>
-              </div>
-            </el-card>
-          </div>
-        </el-col>
-        
         <!-- 效率指标区域 -->
-        <el-col :span="24" :lg="12">
+        <el-col :span="24">
           <div class="data-section">
             <h2>处理效率</h2>
             <el-row :gutter="20">
-              <el-col :span="12">
+              <el-col :xs="24" :sm="12">
                 <el-card shadow="hover" class="time-card">
                   <template #header>
                     <div class="card-header">
@@ -130,7 +82,7 @@
                   <div class="time-description">从问题提交到首次回复的平均时间</div>
                 </el-card>
               </el-col>
-              <el-col :span="12">
+              <el-col :xs="24" :sm="12">
                 <el-card shadow="hover" class="time-card">
                   <template #header>
                     <div class="card-header">
@@ -189,23 +141,6 @@
               <el-table-column prop="pendingIssues" label="待处理" width="100" sortable></el-table-column>
               <el-table-column prop="processingIssues" label="处理中" width="100" sortable></el-table-column>
               <el-table-column prop="resolvedIssues" label="已解决" width="100" sortable></el-table-column>
-              <el-table-column prop="averageRating" label="满意度评分" width="120" sortable>
-                <template #default="scope">
-                  <div class="rating-cell">
-                    <span>{{ scope.row.averageRating || '暂无' }}</span>
-                    <el-rate
-                      v-if="scope.row.averageRating > 0"
-                      :model-value="Number(scope.row.averageRating)"
-                      disabled
-                      :colors="ratingColors"
-                      :show-text="false"
-                      :show-score="false"
-                      :size="14"
-                    ></el-rate>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column prop="ratingsCount" label="评价数" width="100" sortable></el-table-column>
               <el-table-column prop="responseTime" label="平均响应时间(小时)" width="150" sortable></el-table-column>
               <el-table-column prop="resolveTime" label="平均解决时间(小时)" width="150" sortable></el-table-column>
               <el-table-column label="完成率" width="150" sortable>
@@ -250,9 +185,6 @@ const isAdmin = computed(() => {
 // 加载状态
 const loading = ref(true)
 
-// 评分颜色
-const ratingColors = ['#F56C6C', '#F56C6C', '#E6A23C', '#E6A23C', '#67C23A']
-
 // 开发者统计数据
 const developerStats = ref([])
 
@@ -262,15 +194,6 @@ const statistics = ref({
   pendingIssues: 0,
   processingIssues: 0,
   resolvedIssues: 0,
-  averageRating: '0.0',
-  ratingsCount: 0,
-  ratingsDistribution: {
-    '1': 0,
-    '2': 0,
-    '3': 0,
-    '4': 0,
-    '5': 0
-  },
   responseTime: '0.0',
   resolveTime: '0.0'
 })
@@ -285,13 +208,7 @@ const showEmpty = computed(() => {
   // 非管理员或没有开发者数据时，检查是否有统计数据
   return !loading.value && 
          statistics.value.totalIssues === 0 && 
-         statistics.value.ratingsCount === 0 && 
          statistics.value.resolvedIssues === 0;
-})
-
-// 平均评分
-const avgRating = computed(() => {
-  return parseFloat(statistics.value.averageRating) || 0
 })
 
 // 完成率
@@ -299,19 +216,6 @@ const completionRate = computed(() => {
   if (statistics.value.totalIssues === 0) return 0
   return Math.round((statistics.value.resolvedIssues / statistics.value.totalIssues) * 100)
 })
-
-// 获取评分百分比
-const getRatingPercentage = (rating) => {
-  if (statistics.value.ratingsCount === 0) return 0
-  return Math.round((statistics.value.ratingsDistribution[rating] / statistics.value.ratingsCount) * 100)
-}
-
-// 获取评分的实际数量
-const getRatingCount = (rating) => {
-  if (statistics.value.ratingsCount === 0) return 0
-  const percentage = getRatingPercentage(rating)
-  return Math.round((percentage / 100) * statistics.value.ratingsCount)
-}
 
 // 获取完成率颜色
 const getCompletionColor = (rate) => {
@@ -349,15 +253,6 @@ const fetchStatistics = async () => {
           pendingIssues: summaryData.pendingIssues || 0,
           processingIssues: summaryData.processingIssues || 0,
           resolvedIssues: summaryData.resolvedIssues || 0,
-          averageRating: String(summaryData.averageRating || '0.0'),
-          ratingsCount: summaryData.ratingsCount || 0,
-          ratingsDistribution: {
-            '1': (summaryData.ratingsDistribution && summaryData.ratingsDistribution['1']) || 0,
-            '2': (summaryData.ratingsDistribution && summaryData.ratingsDistribution['2']) || 0,
-            '3': (summaryData.ratingsDistribution && summaryData.ratingsDistribution['3']) || 0,
-            '4': (summaryData.ratingsDistribution && summaryData.ratingsDistribution['4']) || 0,
-            '5': (summaryData.ratingsDistribution && summaryData.ratingsDistribution['5']) || 0
-          },
           responseTime: String(summaryData.avgResponseTime || '0.0'),
           resolveTime: String(summaryData.avgResolveTime || '0.0')
         }
@@ -372,15 +267,6 @@ const fetchStatistics = async () => {
           pendingIssues: responseData.pendingIssues || 0,
           processingIssues: responseData.processingIssues || 0,
           resolvedIssues: responseData.resolvedIssues || 0,
-          averageRating: String(responseData.averageRating || '0.0'),
-          ratingsCount: responseData.ratingsCount || 0,
-          ratingsDistribution: {
-            '1': (responseData.ratingsDistribution && responseData.ratingsDistribution['1']) || 0,
-            '2': (responseData.ratingsDistribution && responseData.ratingsDistribution['2']) || 0,
-            '3': (responseData.ratingsDistribution && responseData.ratingsDistribution['3']) || 0,
-            '4': (responseData.ratingsDistribution && responseData.ratingsDistribution['4']) || 0,
-            '5': (responseData.ratingsDistribution && responseData.ratingsDistribution['5']) || 0
-          },
           responseTime: String(responseData.responseTime || '0.0'),
           resolveTime: String(responseData.resolveTime || '0.0')
         }
@@ -463,78 +349,6 @@ onMounted(() => {
   color: #67C23A;
 }
 
-.satisfaction-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.rating-summary {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.average-rating {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.rating-value {
-  font-size: 42px;
-  font-weight: bold;
-  color: #FF9900;
-}
-
-.rating-stars {
-  margin: 5px 0;
-}
-
-.rating-count {
-  font-size: 14px;
-  color: #909399;
-}
-
-.rating-distribution {
-  padding: 0 20px;
-}
-
-.rating-bar-container {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.rating-label {
-  min-width: 40px;
-  text-align: right;
-  margin-right: 10px;
-}
-
-.rating-bar-wrapper {
-  flex: 1;
-  background-color: #EBEEF5;
-  height: 12px;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.rating-bar {
-  height: 100%;
-  border-radius: 6px;
-  transition: width 0.5s ease;
-}
-
-.rating-count-label {
-  min-width: 80px;
-  text-align: right;
-  margin-left: 10px;
-  color: #909399;
-  white-space: nowrap;
-}
-
 .time-card {
   height: 160px;
 }
@@ -588,11 +402,5 @@ onMounted(() => {
 
 .developer-name {
   font-weight: 500;
-}
-
-.rating-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
 }
 </style>

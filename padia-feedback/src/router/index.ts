@@ -74,6 +74,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { title: '任务列表' }
       },
       {
+        path: 'tasks/:id',
+        name: 'TaskDetail',
+        component: () => import('../views/common/IssueDetail.vue'),
+        meta: { title: '任务详情', isDeveloper: true }
+      },
+      {
         path: 'issue/:id',
         name: 'DeveloperIssueDetail',
         component: () => import('../views/common/IssueDetail.vue'),

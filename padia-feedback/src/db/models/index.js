@@ -11,21 +11,29 @@ import ModuleModel, { ModuleType, ModuleName } from './Module.js'
 dotenv.config()
 
 // 创建数据库连接
-const sequelize = new Sequelize('padia_user_feedback', 'tongyong', 'zhjh0704', {
-  host: '101.35.218.174',
-  dialect: 'mysql',
-  logging: console.log,
-  define: {
-    timestamps: true,
-    underscored: false
-  },
-  pool: {
-    max: 5,
-    min: 0,
-    acquire: 30000,
-    idle: 10000
+export const sequelize = new Sequelize(
+  process.env.DB_NAME || 'padia_user_feedback',
+  process.env.DB_USER || 'tongyong',
+  process.env.DB_PASSWORD || 'zhjh0704',
+  {
+    host: process.env.DB_HOST || '101.35.218.174',
+    dialect: 'mysql',
+    // 设置时区为北京时间
+    timezone: '+08:00',
+    dialectOptions: {
+      dateStrings: true,
+      typeCast: true,
+      timezone: '+08:00'
+    },
+    define: {
+      timestamps: true,
+      // 确保createdAt和updatedAt字段使用正确的时区
+      createdAt: true,
+      updatedAt: true
+    },
+    logging: false
   }
-})
+)
 
 // 初始化模型
 const User = UserModel(sequelize)
@@ -104,7 +112,6 @@ const initModules = async () => {
 }
 
 export {
-  sequelize,
   User,
   Issue,
   Task,

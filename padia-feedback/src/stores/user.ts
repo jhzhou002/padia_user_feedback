@@ -30,6 +30,7 @@ export const useUserStore = defineStore('user', () => {
   // 计算属性
   const isLoggedIn = computed(() => !!token.value)
   const userRole = computed(() => userInfo.value?.role || '')
+  const isAdmin = computed(() => userInfo.value?.role === UserRole.ADMIN)
   
   // 登录
   const login = async (username: string, password: string) => {
@@ -165,6 +166,7 @@ export const useUserStore = defineStore('user', () => {
     // 计算属性
     isLoggedIn,
     userRole,
+    isAdmin,
     
     // 操作
     login,

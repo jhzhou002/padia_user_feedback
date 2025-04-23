@@ -2,8 +2,8 @@
  * 服务模块索引文件 - 导出所有服务
  */
 
-import emailService from './emailService.js';
+// 以后可以在这里添加其他服务
 
 export {
-  emailService
+  // 暂无服务导出
 }; 

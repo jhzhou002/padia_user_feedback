@@ -9,6 +9,12 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import qiniu from 'qiniu'
+import dotenv from 'dotenv'
+
+// 导入邮件服务模块
+import mailer from './mailer.js';
+
+dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -204,6 +210,20 @@ initDatabase().then(async success => {
                                    process.env.DB_PASSWORD || 'zhjh0704', {
       host: process.env.DB_HOST || '101.35.218.174',
       dialect: 'mysql',
+      // 设置时区为北京时间
+      timezone: '+08:00',
+      dialectOptions: {
+        dateStrings: true,
+        typeCast: true,
+        // 确保MySQL连接也使用正确的时区
+        timezone: '+08:00'
+      },
+      define: {
+        // 为所有模型设置时区处理
+        timestamps: true,
+        createdAt: true,
+        updatedAt: true
+      },
       // 只在错误时输出日志
       logging: (msg) => {
         if (msg.startsWith('Executing (default): SELECT 1+1')) {
@@ -583,47 +603,94 @@ app.get('/modules', async (req, res) => {
 // 提交问题API
 app.post('/issues', authenticateToken, async (req, res) => {
   try {
-    const { title, description, isPublic, moduleId } = req.body
+    const { title, description, moduleId, isPublic = true } = req.body
+    
+    // 验证必填字段
+    if (!title || !description) {
+      return res.status(400).json({ code: 400, message: '标题和描述不能为空', data: null })
+    }
+    
+    // 验证模块ID
+    let validModuleId = null
+    if (moduleId) {
+      const module = await Module.findByPk(moduleId)
+      if (module) {
+        validModuleId = module.id
+      }
+    }
     
     // 创建问题
     const newIssue = await Issue.create({
       title,
       description,
-      status: IssueStatus.PENDING,
-      isPublic: isPublic !== undefined ? isPublic : true,
+      status: 'pending',
       userId: req.user.id,
-      moduleId: moduleId || null
+      moduleId: validModuleId,
+      isPublic: isPublic === true || isPublic === 'true',
+      priority: 'medium' // 默认优先级
     })
     
-    // 如果指定了模块，尝试自动分配给对应模块的开发人员
-    if (moduleId) {
-      // 查找负责该模块的开发人员
-      const developer = await User.findOne({
+    console.log(`【问题提交】用户 ${req.user.username} 创建了问题: ${title}`)
+    
+    // 查找负责该模块的开发人员或默认开发人员
+    let developer = null
+    if (validModuleId) {
+      developer = await User.findOne({
         where: {
-          role: UserRole.DEVELOPER,
-          moduleId
+          role: 'developer',
+          moduleId: validModuleId
         }
       })
-      
-      if (developer) {
-        // 创建任务并分配给开发人员
-        await Task.create({
-          issueId: newIssue.id,
-          assignedTo: developer.id,
-          remark: `自动分配的任务 - 来自模块: ${moduleId}`
-        })
-        
-        console.log(`问题 #${newIssue.id} 已自动分配给开发人员 #${developer.id}`)
-      }
     }
     
+    // 如果找不到模块负责的开发人员，分配给默认开发人员
+    if (!developer) {
+      developer = await User.findOne({
+        where: {
+          role: 'developer'
+        }
+      })
+    }
+    
+    // 创建任务，分配给开发人员
+    if (developer) {
+      await Task.create({
+        issueId: newIssue.id,
+        assignedTo: developer.id,
+        status: 'pending'
+      })
+      
+      console.log(`【任务分配】问题 ${newIssue.id} 已分配给开发人员 ${developer.username}`)
+      
+      // 发送邮件通知开发人员
+      try {
+        // 查询完整的问题信息（包括用户信息）用于邮件发送
+        const issueWithUser = await Issue.findByPk(newIssue.id, {
+          include: [
+            { model: User, as: 'user', attributes: ['id', 'username', 'email'] }
+          ]
+        });
+
+        // 发送邮件通知
+        await mailer.sendNewIssueNotification(issueWithUser, developer);
+      } catch (emailError) {
+        console.error('发送新问题通知邮件失败:', emailError);
+        // 邮件发送失败不影响API响应
+      }
+    } else {
+      console.log(`【任务分配】警告: 问题 ${newIssue.id} 无法分配，因为没有找到开发人员`)
+    }
+    
+    // 返回新创建的问题ID
     res.json({
       code: 200,
       message: '问题提交成功',
-      data: newIssue
+      data: {
+        id: newIssue.id
+      }
     })
   } catch (error) {
-    console.error('提交问题错误:', error)
+    console.error('问题提交错误:', error)
     res.status(500).json({ code: 500, message: '服务器错误', data: null })
   }
 })
@@ -1603,61 +1670,139 @@ app.get('/issues/:id', async (req, res) => {
 // 更新问题状态API
 app.put('/issues/:id/status', authenticateToken, checkRole(['developer', 'admin']), async (req, res) => {
   try {
-    const issueId = parseInt(req.params.id)
+    const issueId = req.params.id
     const { status } = req.body
     
-    console.log(`【状态更新】接收到PUT请求:`, { 
-      issueId, 
-      状态: status,
-      body: req.body,
-      用户ID: req.user.id,
-      请求头: req.headers
+    console.log(`【状态更新】请求数据:`, { 
+      问题ID: issueId, 
+      新状态: status,
+      用户ID: req.user.id, 
+      用户角色: req.user.role 
     })
     
-    // 检查状态是否有效
-    const validStatusValues = Object.values(IssueStatus)
-    console.log(`【状态验证】接收到状态:`, status, `类型:`, typeof status)
-    console.log(`【状态验证】有效状态列表:`, validStatusValues)
-    
-    if (!status || !validStatusValues.includes(status)) {
-      console.log(`【状态更新错误】无效状态:`, status, `不在有效列表中:`, validStatusValues)
-      return res.status(400).json({ code: 400, message: `无效的状态: "${status}"`, data: null })
+    if (!status) {
+      return res.status(400).json({ code: 400, message: '状态不能为空', data: null })
     }
     
-    // 更新问题状态
-    const issue = await Issue.findByPk(issueId)
+    // 校验状态值
+    const validStatus = ['pending', 'processing', 'resolved', 'closed']
+    if (!validStatus.includes(status)) {
+      return res.status(400).json({ 
+        code: 400, 
+        message: `无效的状态值，有效值为: ${validStatus.join(', ')}`, 
+        data: null 
+      })
+    }
+    
+    // 查询问题
+    const issue = await Issue.findOne({ 
+      where: { id: issueId },
+      include: [{ model: User, as: 'user' }] // 包含用户信息用于发送邮件
+    })
     
     if (!issue) {
       console.log(`【状态更新错误】问题不存在:`, issueId)
       return res.status(404).json({ code: 404, message: '问题不存在', data: null })
     }
     
-    console.log(`【状态更新】当前状态:`, issue.status, '目标状态:', status)
+    const previousStatus = issue.status
+    console.log(`【状态更新】当前状态:`, previousStatus, '目标状态:', status)
     
     // 记录状态变更的时间
-    const now = new Date();
+    const now = new Date()
     
-    // 如果状态从非处理中变为处理中，记录处理开始时间
-    if (status === 'processing' && issue.status !== 'processing' && !issue.processingAt) {
-      issue.processingAt = now;
-      console.log(`【状态更新】记录处理开始时间:`, now);
+    // 准备更新数据的对象
+    const updateData = {
+      status: status,
+      updatedAt: now
+    }
+    
+    // 如果状态变为处理中，记录处理开始时间
+    if (status === 'processing' && previousStatus !== 'processing') {
+      updateData.processingAt = now
+      console.log(`【状态更新】将记录处理开始时间:`, now)
     }
     
     // 如果状态变为已解决，记录解决时间
-    if (status === 'resolved' && issue.status !== 'resolved') {
-      issue.resolvedAt = now;
-      console.log(`【状态更新】记录解决时间:`, now);
+    if (status === 'resolved' && previousStatus !== 'resolved') {
+      updateData.resolvedAt = now
+      console.log(`【状态更新】将记录解决时间:`, now)
     }
     
-    issue.status = status
-    await issue.save()
+    console.log('【状态更新】将更新以下字段:', updateData)
+    
+    // 使用SQL直接更新，确保所有字段都能正确更新
+    let updateSQL = 'UPDATE issues SET '
+    const updateValues = []
+    const updateColumns = []
+    
+    // 添加每个更新字段到SQL
+    Object.keys(updateData).forEach(key => {
+      updateColumns.push(`${key} = ?`)
+      updateValues.push(updateData[key])
+    })
+    
+    updateSQL += updateColumns.join(', ')
+    updateSQL += ' WHERE id = ?'
+    updateValues.push(issueId)
+    
+    console.log('【状态更新】执行SQL:', { sql: updateSQL, values: updateValues })
+    
+    // 执行SQL更新
+    await sequelize.query(updateSQL, { 
+      replacements: updateValues,
+      type: sequelize.QueryTypes.UPDATE 
+    })
+    
+    // 重新获取更新后的问题数据
+    const updatedIssue = await Issue.findOne({ 
+      where: { id: issueId },
+      include: [{ model: User, as: 'user' }],
+      attributes: [
+        'id', 'title', 'status', 'processingAt', 'resolvedAt', 
+        'createdAt', 'updatedAt'
+      ]
+    })
     
     console.log(`【状态更新成功】问题ID:`, issueId, '新状态:', status)
+    console.log(`处理时间:`, updatedIssue.processingAt, '解决时间:', updatedIssue.resolvedAt)
+    
+    // 获取状态显示文本
+    const getStatusLabel = (status) => {
+      switch (status) {
+        case 'pending': return '待处理'
+        case 'processing': return '处理中'
+        case 'resolved': return '已解决'
+        case 'closed': return '已关闭'
+        default: return status
+      }
+    }
+    
+    // 发送邮件通知用户状态更新
+    try {
+      if (updatedIssue.user && updatedIssue.user.email) {
+        // 状态变更时发送通知
+        if (previousStatus !== status) {
+          await mailer.sendStatusUpdateNotification(
+            updatedIssue, 
+            getStatusLabel(status)
+          )
+
+          // 如果状态变为已解决，额外发送已解决通知
+          if (status === 'resolved') {
+            await mailer.sendIssueResolvedNotification(updatedIssue)
+          }
+        }
+      }
+    } catch (emailError) {
+      console.error('发送状态更新通知邮件失败:', emailError)
+      // 邮件发送失败不影响API响应
+    }
     
     res.json({
       code: 200,
       message: '更新问题状态成功',
-      data: issue
+      data: updatedIssue
     })
   } catch (error) {
     console.error('【状态更新错误】异常:', error)
@@ -1671,7 +1816,11 @@ app.post('/comments', authenticateToken, async (req, res) => {
     const { issueId, content } = req.body
     
     // 检查问题是否存在
-    const issue = await Issue.findByPk(issueId)
+    const issue = await Issue.findByPk(issueId, {
+      include: [
+        { model: User, as: 'user' }
+      ]
+    })
     
     if (!issue) {
       return res.status(404).json({ code: 404, message: '问题不存在', data: null })
@@ -1687,9 +1836,40 @@ app.post('/comments', authenticateToken, async (req, res) => {
     // 获取完整评论信息（包括用户信息）
     const comment = await Comment.findByPk(newComment.id, {
       include: [
-        { model: User, as: 'user', attributes: ['id', 'username', 'avatar'] }
+        { model: User, as: 'user', attributes: ['id', 'username', 'avatar', 'email', 'role'] }
       ]
     })
+    
+    console.log(`【添加评论】用户 ${req.user.username} 为问题 ${issueId} 添加了评论`)
+    
+    // 查找对应的任务和开发人员
+    const task = await Task.findOne({
+      where: { issueId },
+      include: [
+        { model: User, as: 'developer', attributes: ['id', 'username', 'email', 'role'] }
+      ]
+    })
+    
+    // 发送邮件通知
+    try {
+      // 如果评论者是开发人员，通知用户
+      if (req.user.role === 'developer' || req.user.role === 'admin') {
+        // 通知问题提交者（用户）
+        if (issue.user && issue.user.email && issue.user.id !== req.user.id) {
+          await mailer.sendNewCommentNotification(issue, comment, issue.user)
+        }
+      } 
+      // 如果评论者是普通用户，通知开发人员
+      else if (req.user.role === 'user') {
+        // 通知负责该问题的开发人员
+        if (task && task.developer && task.developer.email) {
+          await mailer.sendNewCommentNotification(issue, comment, task.developer)
+        }
+      }
+    } catch (emailError) {
+      console.error('发送评论通知邮件失败:', emailError)
+      // 邮件发送失败不影响API响应
+    }
     
     res.json({
       code: 200,
@@ -1903,14 +2083,13 @@ app.post('/issues/:id/rating', authenticateToken, async (req, res) => {
 })
 
 // 在导入其他路由前导入邮件服务
-import emailService from './services/emailService.js';
 import * as logger from './utils/logger.js';
 
 // 测试发送邮件接口 - 用于测试或开发环境发送邮件
 app.get('/test-email', async (req, res) => {
   const { email, subject, content } = req.query;
     
-    if (!email) {
+  if (!email) {
     logger.warn(`测试邮件请求未提供email参数`);
     return res.status(400).json({ success: false, message: '缺少必要的email参数' });
   }
@@ -1932,40 +2111,37 @@ app.get('/test-email', async (req, res) => {
        </div>` : 
       '<div>这是一封测试邮件，请忽略。</div>';
     
-    // 发送邮件
+    // 发送邮件 - 使用新的mailer模块
     console.log(`----- 开始发送邮件 -----`);
-    const result = await emailService.testEmailSending(email, emailSubject, content, emailBody);
     
-    if (result) {
+    // 验证邮件服务连接
+    const isConnected = await mailer.verifyConnection();
+    
+    if (!isConnected) {
+      logger.error(`邮件服务连接失败`);
+      console.error(`× 邮件服务连接失败，请检查配置`);
+      console.log(`----- 邮件发送结束 -----\n`);
+      return res.json({ success: false, message: '邮件服务连接失败，请检查配置' });
+    }
+    
+    // 使用新的mailer模块发送邮件
+    const result = await mailer.sendMail({
+      to: email,
+      subject: emailSubject,
+      html: emailBody
+    });
+    
+    if (result.success) {
       logger.info(`测试邮件发送成功: ${email}`);
       console.log(`✓ 测试邮件发送成功! 邮箱: ${email}`);
       console.log(`----- 邮件发送结束 -----\n`);
       return res.json({ success: true, message: '邮件发送成功' });
     } else {
-      // 尝试直接用邮件服务发送
-      logger.warn(`测试邮件通过testEmailSending失败，尝试使用sendMail`);
-      console.log(`× 第一种方法失败`);
-      console.log(`尝试使用备用发送方法...`);
-      
-      const fallbackResult = await emailService.sendMail(
-        email, 
-        emailSubject, 
-        emailBody, 
-        content || '这是一封测试邮件，请忽略。'
-      );
-      
-      if (fallbackResult) {
-        logger.info(`测试邮件通过备用方法发送成功: ${email}`);
-        console.log(`✓ 备用方法发送成功! 邮箱: ${email}`);
-        console.log(`----- 邮件发送结束 -----\n`);
-        return res.json({ success: true, message: '邮件发送成功（备用方法）' });
-      } else {
-        logger.error(`测试邮件通过所有方法发送失败: ${email}`);
-        console.error(`× 所有发送方法都失败! 邮箱: ${email}`);
-        console.log(`----- 邮件发送结束 -----\n`);
-        // 重要改动: 即使发送失败也返回成功，避免前端处理复杂逻辑
-        return res.json({ success: true, message: '邮件发送请求已接收（实际发送可能失败）' });
-      }
+      logger.error(`测试邮件发送失败: ${result.error}`);
+      console.error(`× 邮件发送失败! 错误: ${result.error}`);
+      console.log(`----- 邮件发送结束 -----\n`);
+      // 重要改动: 即使发送失败也返回成功，避免前端处理复杂逻辑
+      return res.json({ success: true, message: '邮件发送请求已接收（实际发送可能失败）' });
     }
   } catch (error) {
     logger.error(`测试邮件发送出错: ${error.message}`, error);
@@ -1986,6 +2162,150 @@ app.use('/api/comments', (await import('./routes/comments.js')).default);
 app.use('/api/tasks', (await import('./routes/tasks.js')).default);
 
 // 启动服务器
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`服务器已启动，端口: ${PORT}`)
+  
+  // 注释掉未定义的函数调用
+  // await createAdminUser()
+  
+  // await createDefaultModules()
+  
+  // await createDefaultDevelopers()
+  
+  // 验证邮件服务连接
+  try {
+    const isConnected = await mailer.verifyConnection()
+    console.log(`邮件服务连接状态: ${isConnected ? '正常' : '异常'}`)
+    
+    // 如果需要测试邮件发送功能，取消下面注释
+    /*
+    const testEmail = process.env.TEST_EMAIL || '接收测试邮件的邮箱'
+    if (testEmail && isConnected) {
+      console.log(`正在发送测试邮件到: ${testEmail}`)
+      const result = await mailer.sendMail({
+        to: testEmail,
+        subject: 'PADIA反馈平台 - 邮件服务测试',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+            <h2 style="color: #2c3e50; margin-top: 0;">邮件服务测试</h2>
+            <p>这是一封测试邮件，用于验证PADIA反馈平台的邮件服务配置是否正确。</p>
+            <p>如果您收到这封邮件，说明邮件服务已配置成功。</p>
+            <p>服务器启动时间: ${new Date().toLocaleString('zh-CN')}</p>
+            <p style="color: #6c757d; font-size: 12px; margin-top: 30px;">
+              此邮件由系统自动发送，请勿直接回复。
+            </p>
+          </div>
+        `
+      })
+      console.log('测试邮件发送结果:', result)
+    }
+    */
+  } catch (error) {
+    console.error('验证邮件服务连接时出错:', error)
+  }
 }) 
+
+// 如果是开发环境，添加邮件测试路由
+if (process.env.NODE_ENV === 'development') {
+  /**
+   * 测试邮件发送功能
+   * 请求参数:
+   * - email: 收件人邮箱
+   */
+  app.get('/api/test/email', authenticateToken, checkRole(['admin']), async (req, res) => {
+    try {
+      const email = req.query.email || req.user.email;
+      
+      if (!email) {
+        return res.status(400).json({ 
+          code: 400, 
+          message: '缺少邮箱参数', 
+          data: null 
+        });
+      }
+      
+      console.log(`【邮件测试】正在发送测试邮件到: ${email}`);
+      
+      // 验证邮件服务连接
+      const isConnected = await mailer.verifyConnection();
+      
+      if (!isConnected) {
+        return res.status(500).json({ 
+          code: 500, 
+          message: '邮件服务连接失败，请检查配置', 
+          data: null 
+        });
+      }
+      
+      // 发送测试邮件
+      const result = await mailer.sendMail({
+        to: email,
+        subject: 'PADIA反馈平台 - 邮件服务测试',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+            <h2 style="color: #2c3e50; margin-top: 0;">邮件服务测试</h2>
+            <p>这是一封测试邮件，用于验证PADIA反馈平台的邮件服务配置是否正确。</p>
+            <p>如果您收到这封邮件，说明邮件服务已配置成功！</p>
+            <p>发送时间: ${new Date().toLocaleString('zh-CN')}</p>
+            <p>邮件配置信息:</p>
+            <ul>
+              <li>服务器: ${process.env.MAIL_HOST || '默认配置'}</li>
+              <li>端口: ${process.env.MAIL_PORT || '默认配置'}</li>
+              <li>发件人: ${process.env.MAIL_USER || '默认配置'}</li>
+            </ul>
+            <p style="color: #6c757d; font-size: 12px; margin-top: 30px;">
+              此邮件由系统自动发送，请勿直接回复。
+            </p>
+          </div>
+        `
+      });
+      
+      console.log('测试邮件发送结果:', result);
+      
+      if (result.success) {
+        res.json({
+          code: 200,
+          message: '测试邮件发送成功',
+          data: {
+            email,
+            messageId: result.messageId,
+            sentAt: new Date()
+          }
+        });
+      } else {
+        res.status(500).json({
+          code: 500,
+          message: '测试邮件发送失败',
+          data: {
+            error: result.error
+          }
+        });
+      }
+    } catch (error) {
+      console.error('测试邮件发送错误:', error);
+      res.status(500).json({ 
+        code: 500, 
+        message: '服务器错误', 
+        data: { error: error.message } 
+      });
+    }
+  });
+  
+  // 添加一个查看邮件配置信息的接口
+  app.get('/api/test/email-config', authenticateToken, checkRole(['admin']), (req, res) => {
+    // 隐藏密码，只返回部分配置信息
+    const config = {
+      host: process.env.MAIL_HOST || 'smtp.exmail.qq.com',
+      port: process.env.MAIL_PORT || 465,
+      user: process.env.MAIL_USER || '未配置',
+      secure: true,
+      configured: !!process.env.MAIL_USER && !!process.env.MAIL_PASS
+    };
+    
+    res.json({
+      code: 200,
+      message: '获取邮件配置成功',
+      data: config
+    });
+  });
+}

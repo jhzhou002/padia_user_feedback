@@ -1,7 +1,9 @@
 import express from 'express';
 import { Issue, User, Module, Task } from '../../src/db/models/index.js';
 import { authMiddleware } from '../middleware/auth.js';
-import emailService from '../services/emailService.js';
+// 替换emailService引用为mailer
+// import emailService from '../services/emailService.js';
+import mailer from '../mailer.js';
 import * as logger from '../utils/logger.js';
 import nodemailer from 'nodemailer';
 import axios from 'axios';
@@ -114,7 +116,7 @@ router.post('/', authMiddleware, async (req, res) => {
           
           // 使用新的专用方法发送开发者通知邮件
           try {
-            const result = await emailService.sendDeveloperNotification(
+            const result = await mailer.sendDeveloperNotification(
               developer.email,
               newIssue,
               module.name
@@ -281,7 +283,7 @@ router.post('/submit', authMiddleware, async (req, res) => {
           
           // 使用新的专用方法发送开发者通知邮件
           try {
-            const result = await emailService.sendDeveloperNotification(
+            const result = await mailer.sendDeveloperNotification(
               developer.email,
               newIssue,
               module.name
@@ -378,7 +380,7 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
 
     // 发送状态变更邮件通知给用户
     try {
-      await emailService.sendStatusChangeNotification(issue, oldStatus, status);
+      await mailer.sendStatusChangeNotification(issue, oldStatus, status);
       logger.info(`已向用户发送状态变更通知邮件`);
     } catch (emailError) {
       logger.error('发送状态变更邮件通知失败', emailError);
@@ -415,7 +417,7 @@ router.post('/test-email', authMiddleware, async (req, res) => {
     }
     
     // 发送测试邮件
-    const success = await emailService.testEmailSending(email);
+    const success = await mailer.testEmailSending(email);
     
     if (success) {
       logger.info(`测试邮件已发送到 ${email}`);
@@ -453,7 +455,7 @@ router.get('/test-email', authMiddleware, async (req, res) => {
     }
     
     // 发送测试邮件
-    const success = await emailService.testEmailSending(email);
+    const success = await mailer.testEmailSending(email);
     
     if (success) {
       logger.info(`测试邮件已发送到 ${email}`);
@@ -493,7 +495,7 @@ router.get('/open-test-email', async (req, res) => {
     console.log(`接收到公开测试邮件请求，目标邮箱: ${email}`);
     
     // 发送测试邮件
-    const success = await emailService.testEmailSending(email);
+    const success = await mailer.testEmailSending(email);
     
     if (success) {
       logger.info(`公开测试邮件已发送到 ${email}`);
@@ -533,7 +535,7 @@ router.get('/public-email-test', async (req, res) => {
     console.log(`接收到公开测试邮件请求 (public)，目标邮箱: ${email}`);
     
     // 发送测试邮件
-    const success = await emailService.testEmailSending(email);
+    const success = await mailer.testEmailSending(email);
     
     if (success) {
       logger.info(`公开测试邮件已发送到 ${email}`);
@@ -566,7 +568,7 @@ router.get('/test-qq-email', async (req, res) => {
     console.log(`收到QQ邮箱连接测试请求，目标邮箱: ${email}`);
     
     // 测试QQ邮箱连接
-    const success = await emailService.testEmailSending(email);
+    const success = await mailer.testEmailSending(email);
     
     if (success) {
       logger.info(`QQ邮箱测试成功，目标邮箱: ${email}`);
@@ -599,7 +601,7 @@ router.get('/reinit-email', async (req, res) => {
     console.log('收到重新初始化邮件服务请求');
     
     // 强制重新初始化邮件发送器
-    const success = await emailService.forceReinitializeTransporter();
+    const success = await mailer.forceReinitializeTransporter();
     
     if (success) {
       logger.info('邮件服务重新初始化成功');
@@ -632,7 +634,7 @@ router.get('/test-email-direct', async (req, res) => {
     console.log(`\x1b[36m测试目标邮箱: ${email}\x1b[0m`);
 
     // 强制初始化邮件服务
-    await emailService.forceReinitializeTransporter();
+    await mailer.forceReinitializeTransporter();
     
     // 创建一个简单的测试邮件
     const testMailOptions = {
@@ -647,7 +649,7 @@ router.get('/test-email-direct', async (req, res) => {
     
     try {
       // 尝试发送
-      const info = await emailService.testEmailSending(email);
+      const info = await mailer.testEmailSending(email);
       if (info) {
         console.log(`\x1b[32m✓ 邮件发送成功!\x1b[0m`);
         console.log(`\x1b[32m消息ID: ${info.messageId}\x1b[0m`);
@@ -708,7 +710,7 @@ router.get('/test-email', async (req, res) => {
     console.log(`邮件内容: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
     
     // 使用自定义主题和内容发送测试邮件
-    const result = await emailService.testEmailSending(
+    const result = await mailer.testEmailSending(
       email, 
       subject,
       content,

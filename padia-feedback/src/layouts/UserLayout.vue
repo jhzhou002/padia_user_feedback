@@ -4,11 +4,12 @@
       <div class="logo">PADIA用户反馈平台</div>
       <div class="nav">
         <router-link to="/user/submit" class="nav-item">提交问题</router-link>
-        <router-link to="/user/issues" class="nav-item">我的问题列表</router-link>
+        <router-link to="/user/issues" class="nav-item">我的问题</router-link>
         <router-link to="/user/hot" class="nav-item">热门问题</router-link>
         <router-link v-if="isAdmin" to="/developer/tasks" class="nav-item">开发页面</router-link>
       </div>
       <div class="user-info">
+        <notification-badge />
         <el-dropdown @command="handleCommand" class="user-dropdown">
           <span class="user-dropdown-link">
             <el-icon class="user-icon"><User /></el-icon>
@@ -38,6 +39,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, User } from '@element-plus/icons-vue'
 import authApi from '../api/auth'
+import NotificationBadge from '../components/NotificationBadge.vue'
 
 const router = useRouter()
 const username = ref('用户')

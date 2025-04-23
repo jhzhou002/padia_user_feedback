@@ -4,7 +4,7 @@
     
     <!-- 状态筛选标签 -->
     <div class="status-tabs">
-      <el-tabs v-model="activeStatus" @tab-click="handleStatusTabClick" type="card">
+      <el-tabs v-model="activeStatus" @tab-click="handleTabClick" type="card">
         <el-tab-pane name="all">
           <template #label>
             <div class="tab-label">
@@ -37,7 +37,7 @@
             <div class="tab-label">
               <el-icon><Select /></el-icon>
               <span>已解决</span>
-              <el-badge :value="resolvedCount" class="status-count" type="success" v-if="resolvedCount > 0" />
+              <el-badge :value="statusCounts.resolved" class="status-count" type="success" v-if="statusCounts.resolved > 0" />
             </div>
           </template>
         </el-tab-pane>
@@ -58,27 +58,25 @@
         </el-input>
       </div>
       
-      <el-card v-loading="loading" class="task-list-card">
-        <div v-if="taskList.length === 0 && !loading" class="empty-data">
+      <el-card v-loading="isLoading" class="task-list-card">
+        <div v-if="tasks.length === 0 && !isLoading" class="empty-data">
           <el-empty :description="`暂无${getStatusLabel(activeStatus)}任务`" />
         </div>
         
-        <div v-for="task in taskList" :key="task.id" 
+        <div v-for="task in tasks" :key="task.id" 
              class="task-item" 
-             @click="handleViewDetail(task)">
+             @click="viewTaskDetails(task.id)">
           <div class="task-item-header">
             <span class="task-title">{{ task.issue?.title }}</span>
             <div class="task-user-info">
-              <!-- 添加品牌标签，admin用户除外 -->
-              <span v-if="task.issue?.user?.brand && task.issue?.user?.role !== 'admin'" class="tag-item">
-                <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.brand }}</el-tag>
-              </span>
-              <!-- 添加用户工厂信息标签，admin用户除外 -->
-              <span v-if="task.issue?.user?.factory && task.issue?.user?.role !== 'admin'" class="tag-item">
-                <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.factory }}</el-tag>
-              </span>
               <span v-if="task.issue?.user?.email">
                 <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.email }}</el-tag>
+              </span>
+              <span v-if="task.issue?.user?.brand">
+                <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.brand }}</el-tag>
+              </span>
+              <span v-if="task.issue?.user?.factory">
+                <el-tag size="small" effect="plain" type="info">{{ task.issue?.user?.factory }}</el-tag>
               </span>
             </div>
           </div>
@@ -93,7 +91,7 @@
           </div>
         </div>
         
-        <div class="pagination-container" v-if="taskList.length > 0">
+        <div class="pagination-container" v-if="tasks.length > 0">
           <el-pagination
             :current-page="currentPage"
             :page-size="pageSize"
@@ -101,7 +99,7 @@
             :page-sizes="[10, 20, 50, 100]"
             layout="total, sizes, prev, pager, next"
             @size-change="handleSizeChange"
-            @current-change="handleCurrentChange"
+            @current-change="handlePageChange"
           />
         </div>
       </el-card>
@@ -110,14 +108,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { 
   Search, Document, Clock, Loading, Select 
 } from '@element-plus/icons-vue'
 import developerApi from '../../api/task'
-import { IssueStatus, type Task } from '../../types'
+import { IssueStatus } from '../../types'
 
 const router = useRouter()
 
@@ -131,23 +129,27 @@ const pageSize = ref(10)
 const total = ref(0)
 
 // 加载状态
-const loading = ref(false)
+const isLoading = ref(false)
 
 // 任务列表
-const taskList = ref<Task[]>([])
+const tasks = ref<any[]>([])
 
 // 各状态任务数量
-const statusCounts = ref({
-  all: 0,
-  pending: 0,
-  processing: 0,
-  resolved: 0,
-  closed: 0
-})
-
-// 计算已处理数量 (已解决 + 已关闭)
-const resolvedCount = computed(() => {
-  return statusCounts.value.resolved || 0
+const statusCounts = computed(() => {
+  const counts = { 
+    all: tasks.value.length,
+    pending: 0,
+    processing: 0,
+    resolved: 0,
+    closed: 0
+  }
+  
+  Object.values(IssueStatus).forEach(status => {
+    // @ts-ignore
+    counts[status] = tasks.value.filter(task => task.issue?.status === status).length
+  })
+  
+  return counts
 })
 
 // 获取状态标签
@@ -183,53 +185,44 @@ const getStatusType = (status: string) => {
 const getTruncatedDescription = (description: string) => {
   if (!description) return ''
   
-  // 清理HTML标签
-  const cleanText = description.replace(/<\/?[^>]+(>|$)/g, '')
+  // 移除HTML标签
+  const textOnly = description.replace(/<\/?[^>]+(>|$)/g, '')
   
   // 截断描述
-  return cleanText.length > 100 ? cleanText.substring(0, 100) + '...' : cleanText
+  return textOnly.length > 100 ? textOnly.substring(0, 100) + '...' : textOnly
 }
 
 // 获取任务列表
-const getTasks = async (status = activeStatus.value) => {
-  loading.value = true
+const getTasks = async () => {
+  isLoading.value = true
   try {
     const response = await developerApi.getDeveloperTasks({
       page: currentPage.value,
       pageSize: pageSize.value,
-      status: status !== 'all' ? status : undefined,
-      search: searchQuery.value
+      status: activeStatus.value !== 'all' ? activeStatus.value : undefined,
+      search: searchQuery.value || undefined
     })
     
     if (response.data && response.data.code === 200) {
-      taskList.value = response.data.data.tasks || []
+      tasks.value = response.data.data.tasks || []
       total.value = response.data.data.total || 0
-      
-      // 更新各状态数量
-      statusCounts.value = {
-        all: response.data.data.counts.total || 0,
-        pending: response.data.data.counts.pending || 0,
-        processing: response.data.data.counts.processing || 0,
-        resolved: response.data.data.counts.resolved || 0,
-        closed: response.data.data.counts.closed || 0
-      }
     } else {
       ElMessage.error(response.data?.message || '获取任务列表失败')
-      taskList.value = []
+      tasks.value = []
       total.value = 0
     }
   } catch (error) {
     console.error('获取任务列表失败:', error)
     ElMessage.error('获取任务列表失败，请稍后重试')
-    taskList.value = []
+    tasks.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
 
 // 处理状态标签点击
-const handleStatusTabClick = () => {
+const handleTabClick = () => {
   currentPage.value = 1
   getTasks()
 }
@@ -247,14 +240,14 @@ const handleSizeChange = (val: number) => {
 }
 
 // 处理页码变化
-const handleCurrentChange = (page: number) => {
+const handlePageChange = (page: number) => {
   currentPage.value = page
   getTasks()
 }
 
-// 查看问题详情
-const handleViewDetail = (row: Task) => {
-  router.push(`/developer/issue/${row.issueId}`)
+// 查看任务详情
+const viewTaskDetails = (taskId: string) => {
+  router.push(`/developer/issue/${taskId}`)
 }
 
 // 格式化任务分配日期为具体时间

@@ -8,7 +8,6 @@ export enum UserRole {
 // 问题状态枚举
 export enum IssueStatus {
   PENDING = 'pending',   // 待处理
-  VIEWED = 'viewed',     // 已查看
   PROCESSING = 'processing', // 处理中
   RESOLVED = 'resolved',  // 已处理
   CLOSED = 'closed'      // 已关闭（保留，可能会用到）

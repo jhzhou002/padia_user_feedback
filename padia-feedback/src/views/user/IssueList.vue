@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <h1 class="page-title">我的问题列表</h1>
+    <h1 class="page-title">我的问题</h1>
     
     <!-- 上方状态筛选标签 -->
     <div class="status-tabs">

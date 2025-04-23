@@ -35,7 +35,7 @@
         
         <!-- 登录表单 -->
         <div v-if="activeTab === 'login'" class="form-box">
-          <el-form :model="loginForm" :rules="loginRules" ref="loginFormRef">
+          <el-form :model="loginForm" :rules="loginRules" ref="loginFormRef" @keyup.enter="handleLogin">
             <el-form-item prop="username">
               <el-input 
                 v-model="loginForm.username" 
@@ -65,7 +65,7 @@
         
         <!-- 注册表单 -->
         <div v-else class="form-box">
-          <el-form :model="registerForm" :rules="registerRules" ref="registerFormRef">
+          <el-form :model="registerForm" :rules="registerRules" ref="registerFormRef" @keyup.enter="handleRegister">
             <el-form-item prop="brand">
               <el-select 
                 v-model="registerForm.brand" 
