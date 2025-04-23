@@ -1,7 +1,5 @@
 # PADIA 用户反馈平台
 
-（视频说明：[PADIA User Feedback Demo_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1kRZ6Y6E9b/?vd_source=6cebfb74eb1fc5510e18c96ef6974f6f)）
-
 
 PADIA用户反馈平台是一个专为车企工厂工作者设计的Web应用，用于规范化管理和高效处理PADIA系统使用过程中遇到的问题。
 
